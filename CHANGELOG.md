@@ -14,6 +14,18 @@ This file records *what* changed; *why* lives in the charter revision notes and
 ## 2026-08-18
 
 ### Added
+- ADR-0002: Python environment settled — the conda env `credit-default-predictor`
+  is the project environment, with uv installing `uv.lock` into it via
+  `UV_PROJECT_ENVIRONMENT`; no separate `.venv/`.
+- `scripts/bootstrap_env.sh` — idempotent, reproducible environment bootstrap
+  (create conda env → install uv → install activation hooks → `uv sync --frozen --inexact`
+  → verify).
+
+### Removed
+- `.venv/` (689 MB) — superseded by the conda env per ADR-0002. Remains gitignored as a
+  guard against it being recreated.
+
+### Added (earlier same day)
 - Agile execution structure on GitHub: 12 phase epics (#1–#12), 53 estimated task
   tickets with acceptance criteria, 7 sprint milestones with due dates
   (2026-08-19 → 2026-11-20); plan and working agreement in docs/PROJECT_PLAN.md.

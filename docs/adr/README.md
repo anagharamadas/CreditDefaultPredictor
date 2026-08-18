@@ -12,6 +12,7 @@ The charter states each decision as a fact; the ADR holds the reasoning.
 | # | Title | Status | Date |
 |---|---|---|---|
 | [0001](0001-tool-stack.md) | Tool stack for the MLOps pipeline | ACCEPTED | 2026-08-18 |
+| [0002](0002-python-environment.md) | Python environment: conda host, uv-locked deps | ACCEPTED | 2026-08-18 |
 
 ## Expected future ADRs
 

@@ -36,12 +36,28 @@ Phase **P0 — charter & requirements** (of a P0–P12 roadmap). See:
 
 ## Setup
 
-Requires [uv](https://docs.astral.sh/uv/). The environment is fully pinned
-(`uv.lock`, Python 3.12):
+A conda environment supplies the Python 3.12 interpreter; [uv](https://docs.astral.sh/uv/)
+installs every dependency into that same environment from `uv.lock`. There is no separate
+`.venv/`. Rationale: [ADR-0002](docs/adr/0002-python-environment.md).
 
 ```bash
-uv sync
+bash scripts/bootstrap_env.sh          # creates the env, installs uv, syncs uv.lock
+conda activate credit-default-predictor
 ```
+
+The script is idempotent — rerun it any time to repair or re-sync the environment. It also
+installs a conda activation hook that exports `UV_PROJECT_ENVIRONMENT=$CONDA_PREFIX`, which
+is what keeps uv installing into the conda env instead of creating `.venv/`.
+
+Day-to-day, once activated:
+
+| Task | Command |
+|---|---|
+| Re-sync after pulling | `uv sync --frozen --inexact` |
+| Add a dependency | `uv add <pkg>` (never bare `pip install` — see ADR-0002) |
+| Add a dev dependency | `uv add --dev <pkg>` |
+| Check lock is in sync | `uv lock --check` |
+| Tests / lint | `pytest` · `ruff check .` |
 
 ## Data
 
