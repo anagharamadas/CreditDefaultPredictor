@@ -225,5 +225,5 @@ approval decision. That constraint is a design requirement, not a preference.
 - [x] Repo initialised; raw data laid out immutably under `data/raw/` and gitignored.
 - [x] Datasets hashed (md5) and recorded in `data/README.md`; Zenodo file verified
       against its published md5.
-- [ ] Pinned environment (lockfile) committed.
+- [x] Pinned environment (uv lockfile, Python 3.12) committed.
 - [x] Stack decisions either locked or explicitly deferred with a date (§6.1, ADR-0001).

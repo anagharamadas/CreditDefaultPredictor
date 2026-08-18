@@ -34,6 +34,15 @@ Phase **P0 — charter & requirements** (of a P0–P12 roadmap). See:
 - **Excluded by decision**: `grade`, `sub_grade`, `int_rate` (LendingClub's own
   underwriting outputs) and all post-origination columns (leakage).
 
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/). The environment is fully pinned
+(`uv.lock`, Python 3.12):
+
+```bash
+uv sync
+```
+
 ## Data
 
 Raw data is not committed. Download the Kaggle distribution

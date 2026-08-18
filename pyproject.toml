@@ -1,0 +1,22 @@
+[project]
+name = "credit-default-predictor"
+version = "0.1.0"
+description = "MLOps-first credit default granting model on LendingClub data. See CHARTER.md."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "dvc>=3.67.1",
+    "fastapi>=0.141.1",
+    "mlflow>=3.15.1",
+    "pandas>=2.3.3",
+    "pandera>=0.32.1",
+    "prefect>=3.8.3",
+    "pyarrow>=25.0.1",
+    "uvicorn[standard]>=0.52.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.3",
+]

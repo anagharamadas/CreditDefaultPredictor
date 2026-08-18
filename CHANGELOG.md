@@ -9,11 +9,15 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
-- Environment lockfile (last open P0 checklist item).
+- P1: data contract and DVC tracking of raw files.
 
 ## 2026-08-18
 
 ### Added
+- Pinned environment: `pyproject.toml` + `uv.lock` (uv, Python 3.12) covering the six
+  locked tools — mlflow 3.15.1, dvc 3.67.1, pandera 0.32.1, prefect 3.8.3,
+  fastapi 0.141.1, uvicorn 0.52.3 — plus pandas 2.3.3, pyarrow 25.0.1; dev group:
+  pytest, ruff. **P0 definition of done complete.**
 - ADR-0001: tool stack locked — MLflow, DVC, Pandera, Prefect, Postgres, FastAPI;
   drift monitoring (P10) and deploy target (P8) left open by design.
 - LICENSE (MIT), CHANGELOG.md, ADR index, ARCHITECTURE.md stub.
