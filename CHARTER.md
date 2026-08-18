@@ -1,9 +1,13 @@
 # Project Charter — Credit Default Granting Model (LendingClub)
 
-Status: DRAFT v0.3
-Phase: P0
+Status: DRAFT v0.4
+Phase: P0 complete → P1
 Date: 2026-08-18
 Owner: Anagha Ramadas
+
+Revision note (v0.3 → v0.4): time constraint corrected from ~40 h/week to the actual
+4 h/day Mon–Fri (20 h/week); execution re-planned as seven 2-week sprints
+(2026-08-19 → 2026-11-20, ~264 h capacity) tracked on GitHub. See docs/PROJECT_PLAN.md.
 
 Revision note (v0.2 → v0.3): stack locked (§6.1); rationale in docs/adr/0001-tool-stack.md.
 
@@ -157,7 +161,7 @@ Written explicitly so they can be pointed at when scope pressure appears.
 |---|---|
 | Compute | MacBook Pro M2 Max, 64 GB. Full accepted file loads in memory with headroom; dtype discipline at ingest anyway. |
 | Budget | USD 20 total. Default posture is local-first: Docker Compose, local tracking backend, local Postgres. Cloud is a short-lived end-stage demo at most. |
-| Time | ~40 h/week, 60 days, approximately 343 hours. |
+| Time | 4 h/day Mon–Fri (20 h/week); seven 2-week sprints, 2026-08-19 → 2026-11-20, ~264 h capacity / ~232 h planned. Sprint plan: docs/PROJECT_PLAN.md. |
 | Operator level | Junior, 1-2 years. Phases are sized to be individually completable, not heroic. |
 | Data licence | Kaggle `wordsforthewise/lending-club` distribution — verify its stated licence on the Kaggle page before the repo is made public [VERIFY]. Zenodo benchmark is CC-BY-4.0; attribution mandatory if used. Raw data is never committed to the repo. |
 

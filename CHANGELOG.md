@@ -14,6 +14,9 @@ This file records *what* changed; *why* lives in the charter revision notes and
 ## 2026-08-18
 
 ### Added
+- Agile execution structure on GitHub: 12 phase epics (#1–#12), 53 estimated task
+  tickets with acceptance criteria, 7 sprint milestones with due dates
+  (2026-08-19 → 2026-11-20); plan and working agreement in docs/PROJECT_PLAN.md.
 - Pinned environment: `pyproject.toml` + `uv.lock` (uv, Python 3.12) covering the six
   locked tools — mlflow 3.15.1, dvc 3.67.1, pandera 0.32.1, prefect 3.8.3,
   fastapi 0.141.1, uvicorn 0.52.3 — plus pandas 2.3.3, pyarrow 25.0.1; dev group:
