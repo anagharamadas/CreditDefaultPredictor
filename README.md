@@ -17,6 +17,9 @@ Phase **P0 — charter & requirements** (of a P0–P12 roadmap). See:
   constraints, and the HITL design requirement.
 - [RISK_REGISTER.md](RISK_REGISTER.md) — ranked risks with mitigations, re-scored per phase.
 - [BACKLOG.md](BACKLOG.md) — deliberately parked extensions.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — planned system design and load-bearing rules.
+- [docs/adr/](docs/adr/README.md) — immutable decision records (the "why" behind each fork).
+- [CHANGELOG.md](CHANGELOG.md) — dated record of notable changes.
 - [data/README.md](data/README.md) — data provenance, integrity manifest, and layout.
 
 ## Headline design decisions so far
