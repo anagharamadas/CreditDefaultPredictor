@@ -1,9 +1,11 @@
 # Project Charter — Credit Default Granting Model (LendingClub)
 
-Status: DRAFT v0.2
+Status: DRAFT v0.3
 Phase: P0
-Date: 2026-07-23
+Date: 2026-08-18
 Owner: Anagha Ramadas
+
+Revision note (v0.2 → v0.3): stack locked (§6.1); rationale in docs/adr/0001-tool-stack.md.
 
 Revision note (v0.1 → v0.2): primary dataset switched from the Zenodo curated subset to
 the full Kaggle `wordsforthewise/lending-club` distribution. Rationale: the raw file
@@ -162,6 +164,24 @@ Written explicitly so they can be pointed at when scope pressure appears.
 Suggested effort split, to be defended against drift:
 P0-P3 ~25%, P4-P7 ~25%, P8-P12 ~50%.
 
+### 6.1 Locked stack
+
+Locked at P0. Rationale, alternatives rejected, and accepted tradeoffs are recorded in
+docs/adr/0001-tool-stack.md (not repeated here). Every version pinned at install time and
+verified against that version's own docs before use.
+
+| Slot | Tool | Status |
+|---|---|---|
+| Experiment tracking | MLflow (local backend) | LOCKED |
+| Data versioning | DVC | LOCKED |
+| Data validation | Pandera | LOCKED |
+| Orchestration | Prefect | LOCKED |
+| Prediction store | Postgres | LOCKED |
+| Serving | FastAPI | LOCKED |
+| Drift monitoring | undecided (Evidently / NannyML / custom) | OPEN — decide by P10 |
+| Containerisation | Docker Compose (implied by local-first) | LOCKED |
+| Deploy target | undecided | OPEN — decide by P8 |
+
 ## 7. Roles and the human-in-the-loop gate
 
 Solo project, but the artifact must record the separation of duties, because that
@@ -206,4 +226,4 @@ approval decision. That constraint is a design requirement, not a preference.
 - [x] Datasets hashed (md5) and recorded in `data/README.md`; Zenodo file verified
       against its published md5.
 - [ ] Pinned environment (lockfile) committed.
-- [ ] Stack decisions in the register either locked or explicitly deferred with a date.
+- [x] Stack decisions either locked or explicitly deferred with a date (§6.1, ADR-0001).
