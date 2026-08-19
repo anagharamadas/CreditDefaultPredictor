@@ -1,8 +1,12 @@
 # Data — provenance and integrity manifest
 
 Raw data is **never committed to this repo** (files exceed GitHub's 100 MB limit, and
-committing data is bad practice regardless). This manifest is the versioning record:
-if your local file's md5 and row count match this table, you have the right data.
+committing data is bad practice regardless). Raw files are **DVC-tracked**: each has a
+committed `.dvc` pointer file recording its md5 and size, and `dvc status` verifies the
+local bytes against it. No DVC remote is configured (deliberate: solo project, public
+re-downloadable data, $0 budget) — this manifest plus the pointer files are the
+versioning record. If your local file's md5 and row count match this table, you have
+the right data.
 
 Raw files are immutable. Nothing under `data/raw/` is ever edited in place; all cleaning
 happens downstream in code.
