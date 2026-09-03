@@ -9,7 +9,19 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
-- P1: data contract and DVC tracking of raw files.
+### Added (P1 — via feature/p1-data-contract)
+- DVC tracking for all five raw files: committed `.dvc` pointers whose md5s match the
+  manifest; no remote by design (solo, $0, re-downloadable data).
+- `src/credit_default/ingest.py`: allowlist (28 candidate application-time columns) +
+  explicit dtypes; drops the 33 footer rows with exact-count assertions; writes
+  `data/interim/accepted.parquet` (60 MB derived working copy).
+- `docs/SCHEMA.md`: measured profile of all 151 raw columns (generated, regenerable).
+- `src/credit_default/contract.py`: executable Pandera contract — closed vocabularies,
+  measured ranges with documented headroom, cross-column invariants, `strict=True`.
+  First run caught 30 trace-null rows (29 in 2007 credit-policy legacy population).
+- `docs/DATA_CONTRACT.md` (principles + amendment process), `docs/WALKTHROUGH.md`
+  (plain-English per-phase record for interview preparation).
+- Tests: ingest fixture suite + contract violation matrix + full-data validation.
 
 ## 2026-08-18
 
