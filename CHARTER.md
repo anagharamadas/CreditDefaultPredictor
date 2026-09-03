@@ -44,7 +44,8 @@ feature, metric, or component does not serve the grant/decline decision, it is o
 One loan application, scored once, at origination. No re-scoring over the life of the loan.
 No borrower-level aggregation across multiple loans.
 
-## 3. Dataset and target definition (draft — P2 owns the final version)
+## 3. Dataset and target definition (CONFIRMED at P2 exit, 2026-09-04 — see
+docs/LEAKAGE_LEDGER.md, docs/CLASS_BALANCE.md; §3.2's working assumptions held)
 
 ### 3.1 Dataset
 
