@@ -170,4 +170,53 @@ written evidence; Charter §3's target definition confirmed against the real fil
 
 ---
 
-*Next section: P3 — temporal splits and evaluation protocol, added at P3 exit.*
+## P3 — Temporal splits & evaluation protocol
+
+**The problem P3 solves:** lock the rules of the game before any player exists.
+Split boundaries, metrics, and the operating threshold were all fixed *before the
+first model*, so none of them can quietly bend toward whatever makes a model look good.
+
+**Step 1 — `splits.py`: vintage split with maturity arithmetic**
+- Membership is a pure function of issue date + term: train 2013–2015 (36-month,
+  labelled), validation 2016-H1, holdout 2016-H2, replay 2017–2018. No shuffle, no
+  seed — determinism by construction.
+- The maturity gap is *enforced in code*: the config raises if train_end + 36 months
+  exceeds the observed data window; our train_end sits exactly at that limit
+  (2015-12 + 36m = 2018-12), and a test pins it.
+- *Interview line: "my split config won't compile with an immature training window —
+  the censoring rule is an assertion, not a convention."*
+
+**Step 2 — the frozen holdout (152,838 loans, hashed)**
+- The holdout IDs live in a committed manifest with a recorded sha256. Three
+  mechanisms make "we don't touch it until P6" checkable: freeze() refuses to
+  overwrite; verify() recomputes the holdout from the rules and detects tampering,
+  rule drift, or data drift; and reading it requires the spelled-out keyword
+  `i_understand_this_is_for_final_p6_evaluation=True` — impossible accidentally,
+  visible in any review diff.
+
+**Step 3 — EVAL_PROTOCOL.md, frozen**
+- Five metrics, PR-AUC primary; selection only on later vintages; ties go to the
+  simpler model; a loser that isn't reproducible from its run ID doesn't count.
+- The label-coverage rule is the honest heart of it: 2016+ labels exist only for the
+  fast-resolving subset (validation 82% covered at 18.4% default; holdout 60% at
+  22.1% — same world, different coverage). Quoting a metric there without its
+  coverage number is defined as a protocol violation.
+
+**Step 4 — the cost matrix (ADR-0003) and the derived threshold**
+- FN:FP = 5:1 [ASSUMED], anchored to the measured $12,715 mean funded amount:
+  a funded default costs a large slice of principal; a wrong decline costs ~3 years
+  of margin — order-of-magnitude reasoning, honestly labelled, with a 3:1–8:1
+  sensitivity band reported everywhere.
+- The threshold is *derived, never tuned*: θ = C_FP/(C_FP+C_FN) ≈ 0.167 at baseline,
+  implemented in `threshold.py` with the sensitivity table P6 must print. F1-max
+  thresholds are explicitly forbidden in the protocol.
+- The assumption is under recorded review: issue #70 tracks researching real
+  LGD/recovery/margin evidence to confirm or supersede the ratio — the project's
+  first ADR with a scheduled challenge.
+- *Interview line: "I can tell you exactly which number in my system is assumed,
+  where that's recorded, what would change if it's wrong, and who's on the hook to
+  check it — that's what an assumption register is for."*
+
+---
+
+*Next section: P4 — feature pipeline, added at P4 exit.*
