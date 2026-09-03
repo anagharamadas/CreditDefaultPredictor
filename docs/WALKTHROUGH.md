@@ -106,4 +106,68 @@ team would use, exercised solo so the history reads like a team's.
 
 ---
 
-*Next section: P2 — leakage ledger and label design, added at P2 exit.*
+## P2 — Leakage audit & label design
+
+**The problem P2 solves:** two questions that make or break the project's honesty —
+*which columns may the model look at* (leakage), and *what exactly counts as the
+answer* (the label). Both were answered as tested code plus generated documents,
+before any model exists.
+
+**Step 1 — Leakage ledger, first pass** (`src/credit_default/ledger.py` →
+`docs/LEAKAGE_LEDGER.md`)
+- Every one of the 151 columns got a verdict + one-line justification against the test
+  question: *could a loan officer see this at submission time — and is it the
+  borrower's information rather than LC's own assessment?*
+- Final census: 81 FEATURE, 40 BANNED_POST, 4 BANNED_UNDERWRITING, 7 METADATA,
+  18 EXCLUDED_SCOPE, 1 TARGET.
+- The two subtle bans worth quoting: `last_fico_range_*` (the borrower's FICO
+  *re-pulled during the loan* — post-origination information wearing an innocent
+  name) and `installment` (monthly payment = f(amount, term, **rate**) — it smuggles
+  the banned interest rate back in through arithmetic).
+- *Design decision:* the ledger is a Python dict; the document is generated from it
+  and the P4 pipeline imports `feature_columns()` from it. Audit and pipeline cannot
+  disagree by construction; tests enforce 151-column coverage and pin the classic
+  leaks as banned.
+- *Interview line: "my leakage audit is importable — the feature pipeline literally
+  cannot use a column the audit didn't approve."*
+
+**Step 2 — Second pass: 24 UNDECIDED → 0**
+- Genuinely ambiguous columns were parked honestly in pass 1, then resolved
+  deliberately: with *measurement* where possible (`funded_amnt` differs from
+  `loan_amnt` in only 2,065 rows, ~all pre-2013 — it's a funding-process outcome,
+  banned), with a recorded scope decision where legitimate-but-out-of-v1 (the
+  16-column joint-applicant group → new EXCLUDED_SCOPE category), and with a timing
+  argument where needed (`verification_status` completes before origination — the
+  charter's decision point — so it's a FEATURE, with a serving-side caveat).
+- A test now enforces zero UNDECIDED forever.
+
+**Step 3 — Label truth table** (`src/credit_default/labels.py`)
+- All nine `loan_status` values mapped explicitly; an unknown status *raises* instead
+  of being absorbed. Exclusions carry reasons and are counted, never silently dropped:
+  1,345,350 labelled (19.96% default) / 912,569 transitory / 2,749 credit-policy legacy.
+- The two judgment calls, recorded: `Default` status (40 loans, a 121+-day
+  delinquency stage) → 1, tagged [ASSUMED]; credit-policy legacy loans → excluded as
+  a different underwriting population.
+- *Why the ceremony:* the label is the one thing you cannot fix later — a wrong label
+  silently poisons every downstream model, metric, and dashboard.
+
+**Step 4 — Vintage composition figure** (`docs/figures/vintage_composition.png` +
+`VINTAGE_NOTES.md`)
+- The risk register's "look before you model" artifact. Measured: the 2013–2015
+  36-month train window is ≥99.9% resolved (zero-censoring, now proven not assumed);
+  60-month resolution collapses from 2014 (v1 exclusion justified); default rates
+  drift 12%→20% across 2013–2016 (the real signal the replay will detect); and the
+  2017–18 "improvement" is a snapshot-boundary artifact — the trap to name in any
+  drift discussion.
+
+**Step 5 — Class balance, measured** (`docs/CLASS_BALANCE.md`)
+- v1 training scope: 546,018 loans, 14.07% default (≈ 1:6 imbalance — mild; PR-AUC
+  primary, no resampling without evidence). Default rate rises within the window
+  itself, so even the training years contain drift — P3's split must respect order.
+
+**P2 exit state:** R1 and R2 (the project's two top risks) re-scored 20→10 with
+written evidence; Charter §3's target definition confirmed against the real file.
+
+---
+
+*Next section: P3 — temporal splits and evaluation protocol, added at P3 exit.*

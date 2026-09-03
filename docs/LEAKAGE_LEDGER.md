@@ -9,17 +9,16 @@ information rather than LendingClub's own assessment of them?*
 
 | Category | Count |
 |---|---|
-| FEATURE | 79 |
-| BANNED_POST | 38 |
+| FEATURE | 81 |
+| BANNED_POST | 40 |
 | BANNED_UNDERWRITING | 4 |
 | TARGET | 1 |
-| METADATA | 5 |
-| UNDECIDED | 24 |
+| METADATA | 7 |
+| EXCLUDED_SCOPE | 18 |
+| UNDECIDED | 0 |
 | **total** | **151** |
 
-> **24 columns UNDECIDED** (first-pass state, ticket #18). Ticket #21 must resolve every one; P2 cannot exit otherwise.
-
-## FEATURE — eligible for the model matrix (79)
+## FEATURE — eligible for the model matrix (81)
 
 | column | justification |
 |---|---|
@@ -32,6 +31,8 @@ information rather than LendingClub's own assessment of them?*
 | `application_type` | individual vs joint — application structure, known at submission |
 | `zip_code` | masked 3-digit zip; geographic proxy — fairness-slice obligation (R7), not a ban |
 | `addr_state` | state; same fairness-slice obligation as zip_code |
+| `disbursement_method` | borrower's choice at application (Cash vs DirectPay-to-creditors); known at submission |
+| `verification_status` | verification completes during listing, before origination — the charter's decision point; serving contract must capture status as-of decision time |
 | `dti` | debt-to-income from bureau + stated income; measured -1..999, treatment is a P4 decision |
 | `delinq_2yrs` | bureau: delinquencies in trailing 24 months |
 | `earliest_cr_line` | bureau: first credit line date; used as credit-history-length, always <= issue_d (contract invariant) |
@@ -103,10 +104,12 @@ information rather than LendingClub's own assessment of them?*
 | `total_cu_tl` | bureau field populated only from ~Dec-2015 (38-48% null); app-time legitimate, availability caveat for the 2013-15 train window |
 | `inq_last_12m` | bureau field populated only from ~Dec-2015 (38-48% null); app-time legitimate, availability caveat for the 2013-15 train window |
 
-## BANNED_POST — populated after origination (leakage) (38)
+## BANNED_POST — populated after origination (leakage) (40)
 
 | column | justification |
 |---|---|
+| `funded_amnt` | funding-process outcome, not borrower info; differs from loan_amnt in 2,065 rows, ~all pre-2013 partial-funding era [MEASURED] |
+| `funded_amnt_inv` | investor-allocation outcome; differs from funded_amnt in 6.7% of rows [MEASURED] |
 | `pymnt_plan` | on-a-payment-plan flag; servicing state |
 | `out_prncp` | outstanding principal now; repayment state |
 | `out_prncp_inv` | outstanding principal, investor share |
@@ -161,7 +164,7 @@ information rather than LendingClub's own assessment of them?*
 |---|---|
 | `loan_status` | outcome source; labels.py derives the binary target from it |
 
-## METADATA — identifiers / process / split keys (5)
+## METADATA — identifiers / process / split keys (7)
 
 | column | justification |
 |---|---|
@@ -170,33 +173,29 @@ information rather than LendingClub's own assessment of them?*
 | `url` | listing URL; unique per row, no information beyond id |
 | `policy_code` | constant 1 across all rows; zero variance |
 | `issue_d` | origination month; the vintage-split key — using calendar time as a feature would not transfer to serving |
+| `desc` | discontinued by LC in 2014, 94% null; dead field in the train window — NLP exploration stays BACKLOG item 1 |
+| `initial_list_status` | LC platform listing mechanics (whole vs fractional loan sale) — process field, not borrower information |
 
-## UNDECIDED — must be zero at P2 exit (24)
+## EXCLUDED_SCOPE — app-time legitimate, out of v1 by recorded decision (18)
 
 | column | justification |
 |---|---|
-| `title` | free-text near-duplicate of purpose (63k uniques); app-time but text — keep only if trivially normalisable, else backlog with desc |
-| `desc` | free-text description, 94% null after 2014 (LC removed the field); NLP is backlogged — likely METADATA |
-| `emp_title` | free-text job title, 513k uniques; app-time but unusable without NLP — backlog candidate |
-| `funded_amnt` | amount actually funded — finalised during listing, after application; lean BAN as process outcome |
-| `funded_amnt_inv` | investor-funded portion; same timing question as funded_amnt, plus investor behaviour |
-| `initial_list_status` | whole-vs-fractional listing type — LC platform decision at listing, not borrower info; lean BAN |
-| `disbursement_method` | Cash vs DirectPay — plausibly chosen at application, verify timing; lean FEATURE |
-| `verification_status` | income verification may complete during listing, after submission; widely used in literature — verify timing basis |
-| `annual_inc_joint` | joint applications only (95% null); app-time if kept — decide joint-app feature policy as a group |
-| `dti_joint` | joint applications only; same group decision |
-| `verification_status_joint` | joint applications only; inherits the verification timing question too |
-| `revol_bal_joint` | joint applications only; same group decision |
-| `sec_app_fico_range_low` | secondary applicant bureau (95% null); same group decision |
-| `sec_app_fico_range_high` | secondary applicant bureau; same group decision |
-| `sec_app_earliest_cr_line` | secondary applicant bureau; same group decision |
-| `sec_app_inq_last_6mths` | secondary applicant bureau; same group decision |
-| `sec_app_mort_acc` | secondary applicant bureau; same group decision |
-| `sec_app_open_acc` | secondary applicant bureau; same group decision |
-| `sec_app_revol_util` | secondary applicant bureau; same group decision |
-| `sec_app_open_act_il` | secondary applicant bureau; same group decision |
-| `sec_app_num_rev_accts` | secondary applicant bureau; same group decision |
-| `sec_app_chargeoff_within_12_mths` | secondary applicant bureau; same group decision |
-| `sec_app_collections_12_mths_ex_med` | secondary applicant bureau; same group decision |
-| `sec_app_mths_since_last_major_derog` | secondary applicant bureau; same group decision |
+| `title` | free-text near-duplicate of `purpose` (kept as the closed vocabulary); NLP-only value — BACKLOG item 1 |
+| `emp_title` | free-text job title, 513k uniques; unusable without NLP — BACKLOG item 1 |
+| `annual_inc_joint` | joint-app group decision (see block comment); app-time legitimate, v2 design needed |
+| `dti_joint` | joint-app group decision |
+| `verification_status_joint` | joint-app group decision; also inherits verification timing caveat |
+| `revol_bal_joint` | joint-app group decision |
+| `sec_app_fico_range_low` | joint-app group decision (secondary-applicant bureau) |
+| `sec_app_fico_range_high` | joint-app group decision |
+| `sec_app_earliest_cr_line` | joint-app group decision |
+| `sec_app_inq_last_6mths` | joint-app group decision |
+| `sec_app_mort_acc` | joint-app group decision |
+| `sec_app_open_acc` | joint-app group decision |
+| `sec_app_revol_util` | joint-app group decision |
+| `sec_app_open_act_il` | joint-app group decision |
+| `sec_app_num_rev_accts` | joint-app group decision |
+| `sec_app_chargeoff_within_12_mths` | joint-app group decision |
+| `sec_app_collections_12_mths_ex_med` | joint-app group decision |
+| `sec_app_mths_since_last_major_derog` | joint-app group decision |
 

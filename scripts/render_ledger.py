@@ -19,6 +19,7 @@ TITLES = {
     "BANNED_UNDERWRITING": "BANNED_UNDERWRITING — LC's own credit-assessment outputs (Charter §1)",
     "TARGET": "TARGET — outcome source",
     "METADATA": "METADATA — identifiers / process / split keys",
+    "EXCLUDED_SCOPE": "EXCLUDED_SCOPE — app-time legitimate, out of v1 by recorded decision",
     "UNDECIDED": "UNDECIDED — must be zero at P2 exit",
 }
 

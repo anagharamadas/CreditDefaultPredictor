@@ -13,11 +13,13 @@ Categories:
                            credit assessment (Charter §1 excludes these by decision)
 - TARGET ................. the outcome source; never a feature
 - METADATA ............... identifiers / process fields / split keys; never a feature
+- EXCLUDED_SCOPE ......... application-time legitimate but excluded from v1 by a
+                           recorded scope decision (revisit path: BACKLOG.md)
 - UNDECIDED .............. genuinely ambiguous; must be resolved (zero allowed at P2 exit)
 
 Every entry carries a one-line justification. Percentages cited are measured
-(docs/SCHEMA.md). First pass (ticket #18): UNDECIDED is allowed and enumerated.
-Second pass (ticket #21) must bring UNDECIDED to zero.
+(docs/SCHEMA.md). Second pass (ticket #21, P2 exit) resolved all 24 first-pass
+UNDECIDED entries; a test enforces zero UNDECIDED from here on.
 """
 
 from __future__ import annotations
@@ -27,9 +29,10 @@ BANNED_POST = "BANNED_POST"
 BANNED_UNDERWRITING = "BANNED_UNDERWRITING"
 TARGET = "TARGET"
 METADATA = "METADATA"
+EXCLUDED_SCOPE = "EXCLUDED_SCOPE"
 UNDECIDED = "UNDECIDED"
 
-CATEGORIES = (FEATURE, BANNED_POST, BANNED_UNDERWRITING, TARGET, METADATA, UNDECIDED)
+CATEGORIES = (FEATURE, BANNED_POST, BANNED_UNDERWRITING, TARGET, METADATA, EXCLUDED_SCOPE, UNDECIDED)
 
 # Availability caveat shared by the 2015+ bureau block (columns 64-78): these fields
 # only start being populated around Dec 2015, so they are ~38-48% null overall and
@@ -50,9 +53,9 @@ LEDGER: dict[str, tuple[str, str]] = {
     "loan_amnt": (FEATURE, "requested amount, stated on the application"),
     "term": (FEATURE, "chosen product term; v1 scope filters to 36 months (Charter §3.3)"),
     "purpose": (FEATURE, "borrower-declared purpose; closed 14-value vocabulary"),
-    "title": (UNDECIDED, "free-text near-duplicate of purpose (63k uniques); app-time but text — keep only if trivially normalisable, else backlog with desc"),
-    "desc": (UNDECIDED, "free-text description, 94% null after 2014 (LC removed the field); NLP is backlogged — likely METADATA"),
-    "emp_title": (UNDECIDED, "free-text job title, 513k uniques; app-time but unusable without NLP — backlog candidate"),
+    "title": (EXCLUDED_SCOPE, "free-text near-duplicate of `purpose` (kept as the closed vocabulary); NLP-only value — BACKLOG item 1"),
+    "desc": (METADATA, "discontinued by LC in 2014, 94% null; dead field in the train window — NLP exploration stays BACKLOG item 1"),
+    "emp_title": (EXCLUDED_SCOPE, "free-text job title, 513k uniques; unusable without NLP — BACKLOG item 1"),
     "emp_length": (FEATURE, "employment length, application field, 11-value vocabulary"),
     "home_ownership": (FEATURE, "application field, closed vocabulary"),
     "annual_inc": (FEATURE, "self-reported income (limitation recorded in Charter §8)"),
@@ -64,12 +67,12 @@ LEDGER: dict[str, tuple[str, str]] = {
     "grade": (BANNED_UNDERWRITING, "LC risk grade — their model's output"),
     "sub_grade": (BANNED_UNDERWRITING, "LC risk sub-grade — their model's output"),
     "installment": (BANNED_UNDERWRITING, "monthly payment = f(amount, term, int_rate); smuggles the banned rate back in"),
-    # --- LC listing/funding process fields ---
-    "funded_amnt": (UNDECIDED, "amount actually funded — finalised during listing, after application; lean BAN as process outcome"),
-    "funded_amnt_inv": (UNDECIDED, "investor-funded portion; same timing question as funded_amnt, plus investor behaviour"),
-    "initial_list_status": (UNDECIDED, "whole-vs-fractional listing type — LC platform decision at listing, not borrower info; lean BAN"),
-    "disbursement_method": (UNDECIDED, "Cash vs DirectPay — plausibly chosen at application, verify timing; lean FEATURE"),
-    "verification_status": (UNDECIDED, "income verification may complete during listing, after submission; widely used in literature — verify timing basis"),
+    # --- LC listing/funding process fields (resolved in pass 2 with measurement) ---
+    "funded_amnt": (BANNED_POST, "funding-process outcome, not borrower info; differs from loan_amnt in 2,065 rows, ~all pre-2013 partial-funding era [MEASURED]"),
+    "funded_amnt_inv": (BANNED_POST, "investor-allocation outcome; differs from funded_amnt in 6.7% of rows [MEASURED]"),
+    "initial_list_status": (METADATA, "LC platform listing mechanics (whole vs fractional loan sale) — process field, not borrower information"),
+    "disbursement_method": (FEATURE, "borrower's choice at application (Cash vs DirectPay-to-creditors); known at submission"),
+    "verification_status": (FEATURE, "verification completes during listing, before origination — the charter's decision point; serving contract must capture status as-of decision time"),
     # --- bureau snapshot at application (core block) ---
     "dti": (FEATURE, "debt-to-income from bureau + stated income; measured -1..999, treatment is a P4 decision"),
     "delinq_2yrs": (FEATURE, "bureau: delinquencies in trailing 24 months"),
@@ -142,23 +145,26 @@ LEDGER: dict[str, tuple[str, str]] = {
     "inq_fi": (FEATURE, _B2015),
     "total_cu_tl": (FEATURE, _B2015),
     "inq_last_12m": (FEATURE, _B2015),
-    # --- joint / secondary applicant (structural nulls; group decision in pass 2) ---
-    "annual_inc_joint": (UNDECIDED, "joint applications only (95% null); app-time if kept — decide joint-app feature policy as a group"),
-    "dti_joint": (UNDECIDED, "joint applications only; same group decision"),
-    "verification_status_joint": (UNDECIDED, "joint applications only; inherits the verification timing question too"),
-    "revol_bal_joint": (UNDECIDED, "joint applications only; same group decision"),
-    "sec_app_fico_range_low": (UNDECIDED, "secondary applicant bureau (95% null); same group decision"),
-    "sec_app_fico_range_high": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_earliest_cr_line": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_inq_last_6mths": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_mort_acc": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_open_acc": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_revol_util": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_open_act_il": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_num_rev_accts": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_chargeoff_within_12_mths": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_collections_12_mths_ex_med": (UNDECIDED, "secondary applicant bureau; same group decision"),
-    "sec_app_mths_since_last_major_derog": (UNDECIDED, "secondary applicant bureau; same group decision"),
+    # --- joint / secondary applicant (group decision, pass 2): EXCLUDED_SCOPE ---
+    # Joint apps are 5.3% of loans; these fields are structurally null for the rest and
+    # an honest joint-app design needs merged primary+secondary features (v2, BACKLOG).
+    # application_type stays FEATURE so the model still knows jointness.
+    "annual_inc_joint": (EXCLUDED_SCOPE, "joint-app group decision (see block comment); app-time legitimate, v2 design needed"),
+    "dti_joint": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "verification_status_joint": (EXCLUDED_SCOPE, "joint-app group decision; also inherits verification timing caveat"),
+    "revol_bal_joint": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_fico_range_low": (EXCLUDED_SCOPE, "joint-app group decision (secondary-applicant bureau)"),
+    "sec_app_fico_range_high": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_earliest_cr_line": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_inq_last_6mths": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_mort_acc": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_open_acc": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_revol_util": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_open_act_il": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_num_rev_accts": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_chargeoff_within_12_mths": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_collections_12_mths_ex_med": (EXCLUDED_SCOPE, "joint-app group decision"),
+    "sec_app_mths_since_last_major_derog": (EXCLUDED_SCOPE, "joint-app group decision"),
     # --- post-origination: loan servicing / repayment (unambiguous leakage) ---
     "pymnt_plan": (BANNED_POST, "on-a-payment-plan flag; servicing state"),
     "out_prncp": (BANNED_POST, "outstanding principal now; repayment state"),

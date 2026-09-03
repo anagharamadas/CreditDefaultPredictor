@@ -34,6 +34,12 @@ Mitigation:
 
 Detection: composition and resolution plots in P2. Do this before any modelling.
 
+**Re-scored at P2 exit (2026-09-04): L 2 / I 5 / Score 10 — MAJOR.** Evidence: the
+composition/resolution figure exists (docs/figures/vintage_composition.png +
+VINTAGE_NOTES.md); the train window is measured >=99.9% resolved; the 60-month
+exclusion and the 2017-18 snapshot artifact are documented. Residual likelihood is
+the P10 replay misreading label immaturity as drift — mitigation lands there.
+
 ## R2 — Leakage from the 40+ post-origination columns present in the file
 
 L 4 / I 5 / Score 20 — CRITICAL   (v0.1: trusting curators' leakage claim, 20)
@@ -54,6 +60,12 @@ Mitigation:
   fields, `revol_util`) get flagged, not assumed.
 
 Cost of mitigation: a few hours. Cost of skipping it: the entire artifact's credibility.
+
+**Re-scored at P2 exit (2026-09-04): L 2 / I 5 / Score 10 — MAJOR.** Evidence: ledger
+complete over all 151 columns with zero UNDECIDED (44 banned, justifications written);
+the classification is code (`ledger.py`), the P4 allowlist derives from it, and tests
+pin the classic leaks as banned plus an ingest-vs-ban cross-guard. Residual likelihood
+is P4 implementation error, guarded by the parity/allowlist tests planned there.
 
 ## R3 — Scope creep into modelling, NLP, and reject inference
 

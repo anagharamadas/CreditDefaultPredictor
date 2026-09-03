@@ -9,6 +9,17 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P2 — via feature/p2-leakage-labels + feature/p2-completion)
+- Leakage ledger over all 151 columns as importable code (`src/credit_default/ledger.py`)
+  with generated `docs/LEAKAGE_LEDGER.md`; second pass resolved all 24 UNDECIDED
+  (zero-UNDECIDED now test-enforced). Census: 81 FEATURE / 40 BANNED_POST /
+  4 BANNED_UNDERWRITING / 7 METADATA / 18 EXCLUDED_SCOPE / 1 TARGET.
+- Label truth table (`src/credit_default/labels.py`): nine statuses mapped explicitly,
+  unknown statuses raise, exclusions counted. Labelled population 1,345,350 (19.96%).
+- Vintage composition figure + notes (R1 detection artifact); class balance measured:
+  v1 scope 546,018 loans at 14.07% default.
+- R1/R2 re-scored 20→10 at P2 exit with evidence; Charter §3 target confirmed.
+
 ### Added (P1 — via feature/p1-data-contract)
 - DVC tracking for all five raw files: committed `.dvc` pointers whose md5s match the
   manifest; no remote by design (solo, $0, re-downloadable data).

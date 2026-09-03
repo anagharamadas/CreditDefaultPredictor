@@ -50,6 +50,12 @@ def test_known_leaks_are_banned():
         assert cat in (BANNED_POST, BANNED_UNDERWRITING), f"{col} must be banned, got {cat}"
 
 
+def test_zero_undecided_at_p2_exit():
+    from credit_default.ledger import undecided_columns
+
+    assert undecided_columns() == []
+
+
 def test_feature_columns_are_never_banned_or_target():
     feats = set(feature_columns())
     for col in feats:
