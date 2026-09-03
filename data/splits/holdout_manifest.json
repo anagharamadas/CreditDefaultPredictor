@@ -1,0 +1,11 @@
+{
+  "frozen_on": "2026-09-03",
+  "n_loans": 152838,
+  "sha256": "b4272dd91fd45ef159d0e2fff7c19dc3567d53a241d210dc498c1149e80fcf37",
+  "split_rule": {
+    "term": "36 months",
+    "issue_after": "2016-06",
+    "issue_through": "2016-12"
+  },
+  "opened_for": "final P6 evaluation only (Charter \u00a73.3)"
+}
