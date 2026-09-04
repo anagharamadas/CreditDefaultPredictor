@@ -16,3 +16,9 @@ Items here are legitimate extensions that are out of v1 scope by charter decisio
    the v1 matured-vintages policy cannot cover them.
 5. **Cloud demo deployment.** Short-lived, tear-down scripted, within the $20 ceiling.
    Decision deferred to P8 per charter.
+6. **Research the FN:FP cost ratio (review ADR-0003).** — GitHub issue #70; the one
+   backlog item with a deadline (before the P6 retro). ADR-0003's 5:1 ratio is
+   order-of-magnitude reasoning, not evidence; the operating threshold is fully
+   determined by it. Research LGD/recovery rates for unsecured US personal loans and
+   margin structure, then either confirm the ADR or supersede it with a sourced ratio.
+   Owner: Anagha (research, not implementation).

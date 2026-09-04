@@ -9,6 +9,17 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P3 — via feature/p3-eval-protocol)
+- `src/credit_default/splits.py`: deterministic vintage splits (train 2013–2015 36-mo,
+  validation 2016-H1, holdout 2016-H2, replay 2017–2018) with the maturity gap enforced
+  as a config assertion; measured audit table (train 546,018 @ 100% labelled).
+- Holdout frozen: committed 152,838-ID manifest + sha256, tamper/drift-detecting
+  verify(), and a spelled-out access-guard keyword for P6.
+- `docs/EVAL_PROTOCOL.md` frozen pre-model: metric set, label-coverage rule,
+  comparison rules, threshold policy §5.
+- ADR-0003: cost matrix FN:FP = 5:1 [ASSUMED], 3:1–8:1 sensitivity; `threshold.py`
+  derives θ ≈ 0.167 (never tuned). Research review tracked as issue #70 / BACKLOG 6.
+
 ### Added (P2 — via feature/p2-leakage-labels + feature/p2-completion)
 - Leakage ledger over all 151 columns as importable code (`src/credit_default/ledger.py`)
   with generated `docs/LEAKAGE_LEDGER.md`; second pass resolved all 24 UNDECIDED
