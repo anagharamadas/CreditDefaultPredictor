@@ -29,8 +29,8 @@ def test_reliability_table_exposes_systematic_overconfidence():
     p = np.full(10, 0.60)  # model claims 60% everywhere
     table = reliability_table(y, p, n_bins=2)
     assert (table["gap"] > 0).all()  # overconfident in every bin
-    # bins split the ties 5/5: gaps 0.6 and 0.2; count-weighted ECE = 0.40
-    assert expected_calibration_error(y, p) == pytest.approx(0.40)
+    # 2 bins split the ties 5/5: gaps 0.6 and 0.2; count-weighted ECE = 0.40
+    assert expected_calibration_error(y, p, n_bins=2) == pytest.approx(0.40)
 
 
 def test_calibration_slice_sits_inside_the_train_window():
