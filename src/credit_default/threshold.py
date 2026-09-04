@@ -7,6 +7,7 @@ economic consequence, not a tuning knob.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 # ADR-0003, [ASSUMED]: cost units are relative (FP = 1). See docs/adr/0003-cost-matrix.md.
@@ -49,14 +50,18 @@ def expected_cost_per_loan(
     """Realised cost of decisions at θ, in FP-cost units per loan (P6's business metric).
 
     decline = y_prob >= θ. FN: funded (not declined) but defaulted. FP: declined but
-    would have repaid.
+    would have repaid. Inputs are converted to plain arrays first: two pandas Series
+    with different indexes would otherwise silently align-to-nothing and count zero
+    errors (found the hard way on the first real baseline run).
     """
     if threshold is None:
         threshold = derive_threshold(cost_fn, cost_fp)
-    decline = y_prob >= threshold
-    fn = ((~decline) & (y_true == 1)).sum()
-    fp = (decline & (y_true == 0)).sum()
-    return float(fn * cost_fn + fp * cost_fp) / len(y_true)
+    y = np.asarray(y_true)
+    p = np.asarray(y_prob)
+    decline = p >= threshold
+    fn = int(((~decline) & (y == 1)).sum())
+    fp = int((decline & (y == 0)).sum())
+    return float(fn * cost_fn + fp * cost_fp) / len(y)
 
 
 if __name__ == "__main__":

@@ -45,6 +45,14 @@ def test_expected_cost_arithmetic():
     assert expected_cost_per_loan(y, p) == pytest.approx((5.0 + 1.0) / 4)
 
 
+def test_expected_cost_is_immune_to_index_misalignment():
+    # Regression: y_true carrying a dataframe index vs y_prob with a fresh 0..n index
+    # used to align-to-nothing and report zero cost on real runs.
+    y = pd.Series([1, 1, 0, 0], index=[900, 901, 902, 903])
+    p = pd.Series([0.05, 0.90, 0.90, 0.05])
+    assert expected_cost_per_loan(y, p) == pytest.approx((5.0 + 1.0) / 4)
+
+
 def test_perfect_predictions_cost_nothing():
     y = pd.Series([1, 0, 1, 0])
     p = pd.Series([0.99, 0.01, 0.95, 0.02])
