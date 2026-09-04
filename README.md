@@ -45,6 +45,9 @@ bash scripts/bootstrap_env.sh          # creates the env, installs uv, syncs uv.
 conda activate credit-default-predictor
 ```
 
+macOS system dependency: LightGBM's native library needs OpenMP —
+`brew install libomp` (one-time).
+
 The script is idempotent — rerun it any time to repair or re-sync the environment. It also
 installs a conda activation hook that exports `UV_PROJECT_ENVIRONMENT=$CONDA_PREFIX`, which
 is what keeps uv installing into the conda env instead of creating `.venv/`.

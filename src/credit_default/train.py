@@ -141,7 +141,44 @@ def run_logistic(x_train, y_train, x_val, y_val, coverage) -> str:
         return run.info.run_id
 
 
-RUNNERS = {"prior": run_prior, "logistic": run_logistic}
+def run_lightgbm(x_train, y_train, x_val, y_val, coverage) -> str:
+    """Gradient-boosted trees behind the same pipeline.
+
+    Params are a fixed, modest set — NO search (Charter non-goal 8: hyperparameter
+    tuning beyond a small time-boxed budget is out; the time-box here is zero, and
+    any future budget belongs to P6's selection work, recorded there).
+    deterministic + force_row_wise + fixed seed keep runs reproducible at the cost
+    of some speed — reproducibility is a charter metric, wall-clock is not.
+    """
+    import lightgbm
+
+    params = {
+        "n_estimators": 500,
+        "learning_rate": 0.05,
+        "num_leaves": 31,
+        "min_child_samples": 100,
+        "random_state": 42,
+        "deterministic": True,
+        "force_row_wise": True,
+        "verbose": -1,
+    }
+    with mlflow.start_run(run_name="baseline-lightgbm") as run:
+        mlflow.set_tags(lineage_tags() | {"model_family": "lightgbm"})
+        mlflow.log_params(
+            {"model": "lightgbm", "train_rows": len(y_train),
+             "lightgbm_version": lightgbm.__version__, **params}
+        )
+        model = Pipeline(
+            [("features", build_pipeline()), ("clf", lightgbm.LGBMClassifier(**params))]
+        )
+        model.fit(x_train, y_train)
+        y_prob = model.predict_proba(x_val)[:, 1]
+        mlflow.log_metrics(evaluate(y_val, y_prob, coverage))
+        mlflow.sklearn.log_model(model, name="model", serialization_format=MODEL_SERIALIZATION)
+        return run.info.run_id
+
+
+RUNNERS = {"prior": run_prior, "logistic": run_logistic, "lightgbm": run_lightgbm}
 
 
 def main(which: str) -> None:
