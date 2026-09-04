@@ -502,6 +502,7 @@ dependencies = [
     { name = "pandera" },
     { name = "prefect" },
     { name = "pyarrow" },
+    { name = "scikit-learn" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -521,6 +522,7 @@ requires-dist = [
     { name = "pandera", specifier = ">=0.32.1" },
     { name = "prefect", specifier = ">=3.8.3" },
     { name = "pyarrow", specifier = ">=25.0.1" },
+    { name = "scikit-learn", specifier = ">=1.9.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.3" },
 ]
 

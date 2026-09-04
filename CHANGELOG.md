@@ -9,6 +9,19 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P4 part 1 — via feature/p4-feature-pipeline)
+- Ingest allowlist now derived from the ledger: 84 columns (81 FEATURE + essentials);
+  contract extended with 56 measured-bound columns; rebuilt 186 MB interim parquet
+  passes all checks on 2,260,668 rows.
+- Feature pipeline skeleton (`src/credit_default/features/`): single transform path,
+  ledger-partition tests, serving-safe one-hot, `credit_history_months` engineered;
+  50k-row smoke -> 155-feature matrix.
+- Train/serve parity harness: committed sha256-pinned 64-row synthetic fixture,
+  `serving.py` JSON converters, byte-identical batch-vs-per-request tests.
+- `docs/FEATURE_CATALOGUE.md` (generated; sync-tested against the code) — started,
+  finalised at #32.
+- scikit-learn 1.9.0 added to the locked environment.
+
 ### Added (P3 — via feature/p3-eval-protocol)
 - `src/credit_default/splits.py`: deterministic vintage splits (train 2013–2015 36-mo,
   validation 2016-H1, holdout 2016-H2, replay 2017–2018) with the maturity gap enforced

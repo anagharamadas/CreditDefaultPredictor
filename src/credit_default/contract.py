@@ -43,8 +43,80 @@ US_STATES_DC = [
     "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY",
 ]
 
+# Bureau-block bounds: (0, cap) where cap = measured max (docs/SCHEMA.md) widened with
+# headroom for legitimate unseen values. All nullable — bureau fields carry meaningful
+# nulls ("no such event") and regime-dependent availability (the 2015+ block).
+BUREAU_RANGES: dict[str, tuple[float, float]] = {
+    "collections_12_mths_ex_med": (0, 50),        # measured max 20
+    "mths_since_last_major_derog": (0, 400),      # 226
+    "acc_now_delinq": (0, 50),                    # 14
+    "tot_coll_amt": (0, 2e7),                     # 9.15e6
+    "tot_cur_bal": (0, 2e7),                      # 9.97e6
+    "open_acc_6m": (0, 50),                       # 18
+    "open_act_il": (0, 150),                      # 57
+    "open_il_12m": (0, 60),                       # 25
+    "open_il_24m": (0, 120),                      # 51
+    "mths_since_rcnt_il": (0, 999),               # 511
+    "total_bal_il": (0, 5e6),                     # 1.84e6
+    "il_util": (0, 1000),                         # 1000 (over-limit is real)
+    "open_rv_12m": (0, 80),                       # 28
+    "open_rv_24m": (0, 150),                      # 60
+    "max_bal_bc": (0, 5e6),                       # 1.17e6
+    "all_util": (0, 1000),                        # 239
+    "total_rev_hi_lim": (0, 2e7),                 # 1e7
+    "inq_fi": (0, 150),                           # 48
+    "total_cu_tl": (0, 300),                      # 111
+    "inq_last_12m": (0, 200),                     # 67
+    "acc_open_past_24mths": (0, 150),             # 64
+    "avg_cur_bal": (0, 5e6),                      # 958k
+    "bc_open_to_buy": (0, 5e6),                   # 711k
+    "bc_util": (0, 1000),                         # 339.6
+    "chargeoff_within_12_mths": (0, 50),          # 10
+    "delinq_amnt": (0, 5e6),                      # 250k
+    "mo_sin_old_il_acct": (0, 999),               # 999 (looks like a coded ceiling)
+    "mo_sin_old_rev_tl_op": (0, 999),             # 999
+    "mo_sin_rcnt_rev_tl_op": (0, 999),            # 547
+    "mo_sin_rcnt_tl": (0, 999),                   # 382
+    "mths_since_recent_bc": (0, 999),             # 661
+    "mths_since_recent_bc_dlq": (0, 400),         # 202
+    "mths_since_recent_inq": (0, 60),             # 25
+    "mths_since_recent_revol_delinq": (0, 400),   # 202
+    "num_accts_ever_120_pd": (0, 150),            # 58
+    "num_actv_bc_tl": (0, 150),                   # 50
+    "num_actv_rev_tl": (0, 150),                  # 72
+    "num_bc_sats": (0, 150),                      # 71
+    "num_bc_tl": (0, 200),                        # 86
+    "num_il_tl": (0, 300),                        # 159
+    "num_op_rev_tl": (0, 200),                    # 91
+    "num_rev_accts": (0, 300),                    # 151
+    "num_rev_tl_bal_gt_0": (0, 150),              # 65
+    "num_sats": (0, 250),                         # 101
+    "num_tl_120dpd_2m": (0, 30),                  # 7
+    "num_tl_30dpd": (0, 30),                      # 4
+    "num_tl_90g_dpd_24m": (0, 150),               # 58
+    "num_tl_op_past_12m": (0, 80),                # 32
+    "pct_tl_nvr_dlq": (0, 100),                   # a percentage
+    "percent_bc_gt_75": (0, 100),                 # a percentage
+    "tax_liens": (0, 200),                        # 85
+    "tot_hi_cred_lim": (0, 2e7),                  # 1e7
+    "total_bal_ex_mort": (0, 1e7),                # 3.41e6
+    "total_bc_limit": (0, 5e6),                   # 1.57e6
+    "total_il_high_credit_limit": (0, 5e6),       # 2.12e6
+}
+
+DISBURSEMENT_METHODS = ["Cash", "DirectPay"]
+
+_BUREAU_COLUMNS = {
+    name: Column(float, Check.in_range(lo, hi), nullable=True)
+    for name, (lo, hi) in BUREAU_RANGES.items()
+}
+
 ACCEPTED_SCHEMA = pa.DataFrameSchema(
     columns={
+        **_BUREAU_COLUMNS,
+        "disbursement_method": Column(
+            pa.Category, Check.isin(DISBURSEMENT_METHODS), nullable=False
+        ),
         # --- metadata / target ingredients ---
         "id": Column(str, Check.str_matches(r"^\d+$"), nullable=False, unique=True),
         "loan_status": Column(pa.Category, Check.isin(LOAN_STATUSES), nullable=False),

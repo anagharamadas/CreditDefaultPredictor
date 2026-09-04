@@ -15,12 +15,15 @@ from credit_default.ingest import INTERIM_ACCEPTED
 
 
 def _valid_row() -> dict:
-    return {
+    from credit_default.contract import BUREAU_RANGES
+
+    row = {
         "id": "123", "loan_status": "Fully Paid", "term": " 36 months",
         "issue_d": pd.Timestamp("2015-12-01"), "loan_amnt": 3600.0,
         "purpose": "debt_consolidation", "application_type": "Individual",
         "emp_length": "10+ years", "home_ownership": "MORTGAGE",
         "annual_inc": 55000.0, "verification_status": "Not Verified",
+        "disbursement_method": "Cash",
         "zip_code": "190xx", "addr_state": "PA", "dti": 5.91,
         "delinq_2yrs": 0.0, "fico_range_low": 675.0, "fico_range_high": 679.0,
         "inq_last_6mths": 1.0, "mths_since_last_delinq": 30.0,
@@ -29,17 +32,23 @@ def _valid_row() -> dict:
         "mort_acc": 1.0, "pub_rec_bankruptcies": 0.0,
         "earliest_cr_line": pd.Timestamp("2003-08-01"),
     }
+    row |= {name: 1.0 for name in BUREAU_RANGES}  # all in-range for every bureau field
+    return row
+
+
+CATEGORY_COLS = ("loan_status", "term", "purpose", "application_type", "emp_length",
+                 "home_ownership", "verification_status", "disbursement_method",
+                 "addr_state")
+STRING_OR_DATE = ("id", "zip_code", "issue_d", "earliest_cr_line")
 
 
 def _frame(**overrides) -> pd.DataFrame:
     df = pd.DataFrame([_valid_row() | overrides])
-    for col in ("loan_status", "term", "purpose", "application_type", "emp_length",
-                "home_ownership", "verification_status", "addr_state"):
-        df[col] = df[col].astype("category")
-    for col in ("dti", "delinq_2yrs", "inq_last_6mths", "mths_since_last_delinq",
-                "mths_since_last_record", "open_acc", "pub_rec", "revol_bal",
-                "revol_util", "total_acc", "mort_acc", "pub_rec_bankruptcies"):
-        df[col] = df[col].astype("float64")
+    for col in df.columns:
+        if col in CATEGORY_COLS:
+            df[col] = df[col].astype("category")
+        elif col not in STRING_OR_DATE:
+            df[col] = df[col].astype("float64")
     return df
 
 

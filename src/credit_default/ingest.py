@@ -1,9 +1,10 @@
 """Typed ingest of the raw accepted-loans CSV.
 
-Reads only the candidate application-time columns (allowlist, not blocklist — a column
-absent here never enters the pipeline; final keep/ban decisions belong to the P2 leakage
-ledger). Every dtype is explicit: pandas' dtype inference on this file is unreliable
-(mixed-type columns, footer junk), see RISK_REGISTER R14.
+The column allowlist is DERIVED from the leakage ledger: everything classified
+FEATURE, plus the three non-feature essentials (id, issue_d, loan_status). A column
+the ledger didn't approve cannot be ingested — the audit and the reader cannot
+disagree. Every dtype is explicit: pandas' dtype inference on this file is
+unreliable (mixed-type columns, footer junk), see RISK_REGISTER R14.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+
+from credit_default.ledger import feature_columns
 
 RAW_ACCEPTED = Path("data/raw/kaggle/accepted_2007_to_2018Q4.csv")
 INTERIM_ACCEPTED = Path("data/interim/accepted.parquet")
@@ -20,44 +23,28 @@ RAW_ROWS = 2_260_701
 FOOTER_ROWS = 33  # trailing rows with null id/term/loan_status
 CLEAN_ROWS = RAW_ROWS - FOOTER_ROWS
 
-# Candidate columns. METADATA/TARGET ingredients first, then application-time feature
-# candidates. Deliberately absent: grade/sub_grade/int_rate (excluded by Charter §1),
-# all post-origination columns (P2 will ban them formally), free-text desc/emp_title/title
-# (BACKLOG.md), joint-applicant fields (timing unresolved — P2 decides; re-add if kept).
-DTYPES: dict[str, str] = {
-    # metadata / target ingredients
-    "id": "string",
-    "loan_status": "category",
-    "term": "category",
-    # loan application
-    "loan_amnt": "float64",
-    "purpose": "category",
-    "application_type": "category",
-    # borrower profile
-    "emp_length": "category",
-    "home_ownership": "category",
-    "annual_inc": "float64",
-    "verification_status": "category",
-    "zip_code": "string",
-    "addr_state": "category",
-    # bureau-derived, populated at application
-    "dti": "float64",
-    "delinq_2yrs": "float64",
-    "fico_range_low": "float64",
-    "fico_range_high": "float64",
-    "inq_last_6mths": "float64",
-    "mths_since_last_delinq": "float64",
-    "mths_since_last_record": "float64",
-    "open_acc": "float64",
-    "pub_rec": "float64",
-    "revol_bal": "float64",
-    "revol_util": "float64",
-    "total_acc": "float64",
-    "mort_acc": "float64",
-    "pub_rec_bankruptcies": "float64",
+# Non-feature columns the pipeline still needs: join key, split key, target source.
+NON_FEATURE_REQUIRED = ("id", "issue_d", "loan_status")
+
+# Dtype policy. Everything not listed here is a numeric bureau field -> float64.
+CATEGORICAL_COLS = {
+    "loan_status", "term", "purpose", "application_type", "emp_length",
+    "home_ownership", "verification_status", "disbursement_method", "addr_state",
 }
+STRING_COLS = {"id", "zip_code"}
 DATE_COLS = ["issue_d", "earliest_cr_line"]  # Mon-YYYY strings, parsed after read
-ALLOWLIST = list(DTYPES) + DATE_COLS
+
+ALLOWLIST = sorted(set(feature_columns()) | set(NON_FEATURE_REQUIRED))
+
+DTYPES: dict[str, str] = {
+    col: (
+        "category"
+        if col in CATEGORICAL_COLS
+        else "string" if col in STRING_COLS else "float64"
+    )
+    for col in ALLOWLIST
+    if col not in DATE_COLS
+}
 
 
 def read_accepted(path: Path | str = RAW_ACCEPTED, *, strict: bool = True) -> pd.DataFrame:
@@ -96,4 +83,4 @@ def build_interim(
 
 if __name__ == "__main__":
     path = build_interim()
-    print(f"wrote {path} ({path.stat().st_size / 1e6:.0f} MB)")
+    print(f"wrote {path} ({path.stat().st_size / 1e6:.0f} MB, {len(ALLOWLIST)} columns)")
