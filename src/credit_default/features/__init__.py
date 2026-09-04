@@ -4,7 +4,10 @@ from credit_default.features.pipeline import (  # noqa: F401
     CATEGORICAL_FEATURES,
     DATE_DERIVED,
     EXCLUDED_FROM_MATRIX,
+    FREQUENCY_ENCODED,
     NUMERIC_FEATURES,
+    FrequencyEncoder,
+    TrainWindowGate,
     build_pipeline,
-    derive_date_features,
+    derive_features,
 )

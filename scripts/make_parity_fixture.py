@@ -94,8 +94,10 @@ def main() -> None:
             vals = np.round(rng.uniform(lo, hi, N), 2)
             cols[col] = vals.tolist()
 
-    # dates: issue in 2013-2018, earliest_cr_line 2-30 years before issue
-    issue_year = rng.integers(2013, 2019, N)
+    # dates: issue inside the TRAIN window (the pipeline's gate refuses to fit on
+    # anything else — the fixture models a lawful fit + serve-transform scenario);
+    # earliest_cr_line 2-30 years before issue
+    issue_year = rng.integers(2013, 2016, N)
     issue_month = rng.integers(1, 13, N)
     issue = [pd.Timestamp(int(y), int(m), 1) for y, m in zip(issue_year, issue_month)]
     history_months = rng.integers(24, 360, N)

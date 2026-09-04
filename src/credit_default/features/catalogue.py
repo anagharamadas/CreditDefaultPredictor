@@ -39,7 +39,11 @@ CATEGORY_SETS = {
     "addr_state": US_STATES_DC,
 }
 
-NUMERIC_TRANSFORM = "median impute (median learned on the training split only)"
+NUMERIC_TRANSFORM = (
+    "median impute + missing-indicator columns (a meaningful null stays visible to the "
+    "model) -> standardise. Medians, indicator set, means and variances are all learned "
+    "on the training split only — enforced by the pipeline's train-window gate"
+)
 CATEGORICAL_TRANSFORM = (
     'impute constant "missing" -> one-hot (categories learned on the training split; '
     "unknown values at serving time encode as all-zeros, never an error)"
@@ -53,8 +57,9 @@ def render_markdown() -> str:
         "GENERATED from `src/credit_default/features/catalogue.py` — edit code, rerun",
         "`scripts/render_feature_catalogue.py`. A test asserts this file matches the code.",
         "",
-        "Status: STARTED (#29, skeleton transforms). Finalised at P4 exit (#32) once the",
-        "#30 transform decisions (scaling, zip_code encoding, dti treatment) land.",
+        "Status: transforms FINALISED (#30): scaling on the numeric branch, zip_code",
+        "frequency-encoded, dti clipped to [0, 100], missing-indicator columns added,",
+        "and fit-on-training-window enforced by a gate that raises otherwise.",
         "",
         (
             f"Matrix composition: {len(NUMERIC_FEATURES)} numeric + {len(ENGINEERED)} "
@@ -70,9 +75,22 @@ def render_markdown() -> str:
         (
             "| `credit_history_months` | Age of the credit file at application, in months "
             "| `issue_d`, `earliest_cr_line` | (issue year-month − earliest year-month); "
-            "then median impute | Both dates are on the application; the difference is "
+            "then the numeric branch | Both dates are on the application; the difference is "
             "known the moment it is submitted. `issue_d` itself is never a feature "
             "(METADATA: calendar time would not transfer to serving). |"
+        ),
+        (
+            "| `zip_code_freq` | Share of training loans in the applicant's masked "
+            "3-digit zip | `zip_code` | frequency encoding learned on the training "
+            "split; unknown zips at serving time -> 0.0 | On the application; encoding "
+            "replaces 956 one-hots with one column. Target encoding rejected as "
+            "leak-prone. Geographic proxy: fairness-slice obligation (R7). |"
+        ),
+        (
+            "| `dti` (treatment) | Raw dti clipped to [0, 100] before the numeric branch "
+            "| `dti` | clip, then the numeric branch | Measured raw range is -1..999 with "
+            "sentinel-like extremes (SCHEMA.md); beyond 100 carries no credible ratio "
+            "information. |"
         ),
         "",
         f"## Categorical features ({len(CATEGORICAL_FEATURES)})",
