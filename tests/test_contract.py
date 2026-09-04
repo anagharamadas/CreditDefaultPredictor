@@ -79,6 +79,7 @@ def test_unexpected_extra_column_rejected():
         validate_accepted(df)
 
 
+@pytest.mark.realdata
 @pytest.mark.skipif(not Path(INTERIM_ACCEPTED).exists(), reason="interim parquet not built")
 def test_real_interim_data_passes_contract():
     df = pd.read_parquet(INTERIM_ACCEPTED)

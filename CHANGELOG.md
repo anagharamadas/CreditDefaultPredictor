@@ -9,6 +9,19 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P4 completion — via feature/p4-completion)
+- Transforms finalised: missing-indicator columns (28 on real data), dti clipped to
+  [0,100], zip_code frequency-encoded (custom transformer; unseen→0), StandardScaler
+  on the numeric branch. Real matrix: 184 features.
+- `TrainWindowGate`: pipeline fit() refuses rows issued outside 2013-01..2015-12 —
+  fit-on-train-only enforced by construction, transform unrestricted.
+- Determinism finalised: cross-process equality under different hash seeds, pickle
+  round-trip parity (the P7/P8 artifact boundary), real-data double-build equality.
+- `realdata` pytest marker; CI mode `-m "not realdata"` (85 tests, no raw data).
+- Parity fixture regenerated inside the train window and re-pinned; catalogue
+  regenerated (FINALISED); pipeline flow diagram committed (docs/figures/).
+- WALKTHROUGH P4 section. **P4 exit criteria met.**
+
 ### Added (P4 part 1 — via feature/p4-feature-pipeline)
 - Ingest allowlist now derived from the ledger: 84 columns (81 FEATURE + essentials);
   contract extended with 56 measured-bound columns; rebuilt 186 MB interim parquet

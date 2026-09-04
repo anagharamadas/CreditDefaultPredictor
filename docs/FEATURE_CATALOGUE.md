@@ -3,8 +3,9 @@
 GENERATED from `src/credit_default/features/catalogue.py` — edit code, rerun
 `scripts/render_feature_catalogue.py`. A test asserts this file matches the code.
 
-Status: STARTED (#29, skeleton transforms). Finalised at P4 exit (#32) once the
-#30 transform decisions (scaling, zip_code encoding, dti treatment) land.
+Status: transforms FINALISED (#30): scaling on the numeric branch, zip_code
+frequency-encoded, dti clipped to [0, 100], missing-indicator columns added,
+and fit-on-training-window enforced by a gate that raises otherwise.
 
 Matrix composition: 71 numeric + 1 engineered + one-hot expansions of 7 categoricals. Every feature's application-time justification is inherited verbatim from the leakage ledger; a column without a FEATURE verdict there cannot appear here.
 
@@ -12,7 +13,9 @@ Matrix composition: 71 numeric + 1 engineered + one-hot expansions of 7 categori
 
 | Feature | Definition | Source columns | Transform | Application-time justification |
 |---|---|---|---|---|
-| `credit_history_months` | Age of the credit file at application, in months | `issue_d`, `earliest_cr_line` | (issue year-month − earliest year-month); then median impute | Both dates are on the application; the difference is known the moment it is submitted. `issue_d` itself is never a feature (METADATA: calendar time would not transfer to serving). |
+| `credit_history_months` | Age of the credit file at application, in months | `issue_d`, `earliest_cr_line` | (issue year-month − earliest year-month); then the numeric branch | Both dates are on the application; the difference is known the moment it is submitted. `issue_d` itself is never a feature (METADATA: calendar time would not transfer to serving). |
+| `zip_code_freq` | Share of training loans in the applicant's masked 3-digit zip | `zip_code` | frequency encoding learned on the training split; unknown zips at serving time -> 0.0 | On the application; encoding replaces 956 one-hots with one column. Target encoding rejected as leak-prone. Geographic proxy: fairness-slice obligation (R7). |
+| `dti` (treatment) | Raw dti clipped to [0, 100] before the numeric branch | `dti` | clip, then the numeric branch | Measured raw range is -1..999 with sentinel-like extremes (SCHEMA.md); beyond 100 carries no credible ratio information. |
 
 ## Categorical features (7)
 
@@ -30,7 +33,7 @@ Transform, all rows: impute constant "missing" -> one-hot (categories learned on
 
 ## Numeric features (71)
 
-Transform, all rows: median impute (median learned on the training split only). Bounds enforced upstream by the
+Transform, all rows: median impute + missing-indicator columns (a meaningful null stays visible to the model) -> standardise. Medians, indicator set, means and variances are all learned on the training split only — enforced by the pipeline's train-window gate. Bounds enforced upstream by the
 data contract (`docs/DATA_CONTRACT.md`); meaningful nulls are imputed, and
 whether null-indicator columns should be added is a #30 decision.
 
@@ -115,4 +118,3 @@ Ledger verdict FEATURE (legitimate), excluded by pipeline scope decision:
 | Column | Reason |
 |---|---|
 | `term` | constant ' 36 months' in v1 scope (Charter §3.3) — zero variance by construction |
-| `zip_code` | 956-value masked geography; needs frequency/target encoding designed in #30 — addr_state carries geography until then |

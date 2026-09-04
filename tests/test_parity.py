@@ -17,7 +17,9 @@ from credit_default.features.serving import frame_to_payloads, payloads_to_frame
 from credit_default.ingest import read_accepted
 
 FIXTURE = Path(__file__).parent / "fixtures" / "parity_sample.csv"
-FIXTURE_SHA256 = "d282ca3ccd0077cc94b0df8be41cf7766ba22b452bd3e6205049dde63abfbc1b"
+# Re-pinned at #30: fixture regenerated with train-window issue dates, because the
+# pipeline's TrainWindowGate now refuses to fit on out-of-window rows.
+FIXTURE_SHA256 = "0832b6faac9f6444d49c804ffcd9c12e48dd9f65055db7d0097fc2d22472e958"
 
 
 def test_fixture_is_committed_and_unchanged():

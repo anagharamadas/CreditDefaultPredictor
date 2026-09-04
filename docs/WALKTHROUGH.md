@@ -219,4 +219,73 @@ first model*, so none of them can quietly bend toward whatever makes a model loo
 
 ---
 
-*Next section: P4 — feature pipeline, added at P4 exit.*
+## P4 — Feature pipeline
+
+**The problem P4 solves:** models eat fixed-length rows of numbers; loans arrive as
+text, dates, and numerics full of meaningful gaps. The pipeline is the translator —
+and the project's core claim is that the *same* translator runs at training time and
+inside the serving API. Diagram: `figures/feature_pipeline_flow.svg` (two colored
+paths converging on one purple box — that convergence is the whole design).
+
+**Step 1 — Ingest widened to the audit** (`ingest.py` rewritten)
+- The P1 ingest read a cautious 28 columns; the finished ledger approved 81. The
+  allowlist is now *computed* from `ledger.feature_columns()` — the audit and the
+  reader cannot disagree — and the Pandera contract grew 56 measured-bound columns
+  to match. The rebuilt 186 MB parquet passes every check on all 2,260,668 rows.
+
+**Step 2 — The skeleton with partition proof** (`features/pipeline.py`)
+- Column groups (numeric / categorical / date-derived / frequency-encoded /
+  excluded-with-reason) are derived from the ledger, and a test asserts they
+  **partition** it exactly: a banned column cannot enter, an approved column cannot
+  be silently forgotten. A second test smuggles `total_pymnt` into the input and
+  proves it never reaches the matrix.
+- *Interview line: "my pipeline's column lists are computed from the leakage audit
+  and tested to cover it exactly — forgetting a feature is a test failure, not a
+  silent loss."*
+
+**Step 3 — The transform decisions** (finalised in #30, each recorded)
+- **Missing-indicator columns**: half of applicants have no `mths_since_last_delinq`
+  because they were *never delinquent* — a good sign. Median-imputing alone would
+  disguise them as mildly-bad median cases; an indicator column keeps the null's
+  meaning visible. 28 indicators on real data.
+- **`dti` clipped to [0, 100]**: the raw −1…999 sentinels carry no ratio meaning.
+- **`zip_code` frequency-encoded**: one learned column (share of training loans per
+  masked zip, unseen zip → 0) instead of 956 one-hots; target encoding rejected in
+  writing as leak-prone.
+- **Scaling** on the numeric branch (the logistic baseline needs it; trees don't
+  care); one-hots unscaled. Unknown categories at serve time encode as zeros —
+  a strange loan gets a cautious score, never a 500 error.
+
+**Step 4 — Fit-on-train enforced by construction** (`TrainWindowGate`)
+- The pipeline's first step *refuses to fit* on any row issued outside 2013–2015,
+  while transform passes everything. Imputers, scalers and encoders can only ever
+  learn from the training window — the "future leaks in through the median" bug is
+  structurally impossible, and tests prove both the refusal and the lawful
+  transform of 2018 replay rows.
+- *Interview line: "fit-on-train-only isn't a convention in my repo — fit() throws."*
+
+**Step 5 — Parity, proven across the wire** (`serving.py` + pinned fixture)
+- A committed 64-row synthetic fixture (sha256-pinned: silent regeneration fails the
+  build) goes down both paths: the training batch, and row-by-row through a real
+  `json.dumps`/`loads` round trip plus the serving converter that rebuilds exact
+  training dtypes. Required result: **byte-identical matrices** — `np.array_equal`,
+  not approximately.
+- Scoring payloads structurally exclude `loan_status`: the serve path cannot
+  receive the answer.
+
+**Step 6 — Determinism, three layers deep**
+- Same process: two fresh builds, identical output. **Cross-process**: two
+  interpreters with *different hash seeds*, identical matrix bytes. **Pickle
+  boundary**: the serialised fitted pipeline (what P7 ships, what P8 serves)
+  transforms byte-identically after double dump/load. Plus the same claims on a
+  20k-row real sample.
+- CI wiring pre-done: `realdata` marker; `pytest -m "not realdata"` = 85 tests,
+  ~4s, zero raw-data dependency.
+
+**P4 exit state:** raw parquet → 184-feature matrix end-to-end; every feature in a
+generated, sync-tested catalogue with its application-time justification; parity and
+determinism as failing-capable tests rather than intentions.
+
+---
+
+*Next section: P5 — baselines & experiment tracking, added at P5 exit.*
