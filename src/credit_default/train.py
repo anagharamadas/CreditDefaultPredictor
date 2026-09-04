@@ -13,9 +13,7 @@ Run:  PYTHONPATH=src python -m credit_default.train prior
 
 from __future__ import annotations
 
-import subprocess
 import sys
-from pathlib import Path
 
 import mlflow
 import numpy as np
@@ -25,7 +23,7 @@ from sklearn.metrics import average_precision_score, brier_score_loss, roc_auc_s
 from sklearn.pipeline import Pipeline
 
 from credit_default.features import build_pipeline
-from credit_default.ingest import INTERIM_ACCEPTED, RAW_ACCEPTED
+from credit_default.ingest import INTERIM_ACCEPTED
 from credit_default.labels import LABEL_COL
 from credit_default.splits import TRAIN, VALIDATION, assign_split, split_frame
 from credit_default.threshold import (
@@ -33,9 +31,7 @@ from credit_default.threshold import (
     derive_threshold,
     expected_cost_per_loan,
 )
-from credit_default.tracking import setup_tracking
-
-HOLDOUT_METADATA = Path("data/splits/holdout_manifest.json")
+from credit_default.tracking import setup_tracking, start_tracked_run
 
 # Model serialisation: MLflow 3.x defaults to skops (a safe-loading format), but skops
 # cannot represent our FunctionTransformer(derive_features) — function references are
@@ -43,36 +39,6 @@ HOLDOUT_METADATA = Path("data/splits/holdout_manifest.json")
 # because the artifact is produced AND consumed inside this project only, and the
 # pickle-boundary parity tests (#31) prove transform fidelity across it.
 MODEL_SERIALIZATION = "cloudpickle"
-
-
-# --- lineage (formalised + enforced in #36) ----------------------------------------
-
-def lineage_tags() -> dict[str, str]:
-    """The facts that make a run reproducible: exact data, exact code, exact splits."""
-    def git(*args: str) -> str:
-        result = subprocess.run(["git", *args], capture_output=True, text=True, check=False)
-        return result.stdout.strip()
-
-    raw_md5 = "unknown"
-    dvc_pointer = Path(f"{RAW_ACCEPTED}.dvc")
-    if dvc_pointer.exists():
-        for line in dvc_pointer.read_text().splitlines():
-            if "md5:" in line:
-                raw_md5 = line.split("md5:")[1].strip()
-                break
-
-    manifest_sha = "unknown"
-    if HOLDOUT_METADATA.exists():
-        import json
-
-        manifest_sha = json.loads(HOLDOUT_METADATA.read_text())["sha256"]
-
-    return {
-        "git_commit": git("rev-parse", "HEAD"),
-        "git_dirty": "yes" if git("status", "--porcelain") else "no",
-        "raw_data_md5": raw_md5,
-        "holdout_manifest_sha256": manifest_sha,
-    }
 
 
 # --- evaluation per the frozen protocol --------------------------------------------
@@ -115,8 +81,7 @@ def prepare_data():
 
 def run_prior(x_train, y_train, x_val, y_val, coverage) -> str:
     """Majority/prior baseline: everyone gets the training default rate."""
-    with mlflow.start_run(run_name="baseline-prior") as run:
-        mlflow.set_tags(lineage_tags() | {"model_family": "prior"})
+    with start_tracked_run("baseline-prior", "prior") as run:
         mlflow.log_params({"model": "prior", "train_rows": len(y_train)})
         prior = float(y_train.mean())
         y_prob = np.full(len(y_val), prior)
@@ -128,8 +93,7 @@ def run_prior(x_train, y_train, x_val, y_val, coverage) -> str:
 def run_logistic(x_train, y_train, x_val, y_val, coverage) -> str:
     """Regularised logistic regression behind the one feature pipeline."""
     params = {"C": 1.0, "max_iter": 2000, "solver": "lbfgs"}
-    with mlflow.start_run(run_name="baseline-logistic") as run:
-        mlflow.set_tags(lineage_tags() | {"model_family": "logistic"})
+    with start_tracked_run("baseline-logistic", "logistic") as run:
         mlflow.log_params({"model": "logistic", "train_rows": len(y_train), **params})
         model = Pipeline(
             [("features", build_pipeline()), ("clf", LogisticRegression(**params))]
@@ -162,8 +126,7 @@ def run_lightgbm(x_train, y_train, x_val, y_val, coverage) -> str:
         "force_row_wise": True,
         "verbose": -1,
     }
-    with mlflow.start_run(run_name="baseline-lightgbm") as run:
-        mlflow.set_tags(lineage_tags() | {"model_family": "lightgbm"})
+    with start_tracked_run("baseline-lightgbm", "lightgbm") as run:
         mlflow.log_params(
             {"model": "lightgbm", "train_rows": len(y_train),
              "lightgbm_version": lightgbm.__version__, **params}
