@@ -9,6 +9,20 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P5 — via feature/p5-baselines)
+- MLflow v3.15.1 tracking server in Docker Compose (sqlite volume, restart-proven);
+  `tracking.py` with fail-if-untracked posture; `services` pytest marker.
+- Three protocol-evaluated baselines: prior (PR-AUC 0.1835 = prevalence floor),
+  logistic (0.3236, cost 0.625/loan @5:1), LightGBM 4.7.0 zero-search (0.3446,
+  0.610). Coverage logged beside every metric; holdout untouched.
+- Lineage enforced: `start_tracked_run()` raises without git commit + raw-data md5 +
+  manifest sha. Reproduce-from-run-ID demonstrated bit-exact (delta 0.0) and
+  documented in docs/REPRODUCIBILITY.md.
+- Prefect DAG (`flows.py`): ingest → contract gate → trainings; flow-run metrics
+  matched standalone runs exactly.
+- Fixed: expected-cost index-alignment bug (silent zero cost) with regression test.
+- lightgbm 4.7.0 pinned (macOS: `brew install libomp`, in README).
+
 ### Added (P4 completion — via feature/p4-completion)
 - Transforms finalised: missing-indicator columns (28 on real data), dti clipped to
   [0,100], zip_code frequency-encoded (custom transformer; unseen→0), StandardScaler

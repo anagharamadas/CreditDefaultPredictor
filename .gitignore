@@ -14,7 +14,9 @@ __pycache__/
 venv/
 .ipynb_checkpoints/
 
-# Tooling state (later phases)
+# Tooling state
+# .mlflow/ is the compose-mounted mlflow backend + artifact store
+.mlflow/
 mlruns/
 mlartifacts/
 .dvc/cache

@@ -288,4 +288,55 @@ determinism as failing-capable tests rather than intentions.
 
 ---
 
-*Next section: P5 — baselines & experiment tracking, added at P5 exit.*
+## P5 — Baselines & experiment tracking
+
+**The problem P5 solves:** the first models exist — and every one of them is
+tracked, protocol-evaluated, lineage-stamped, and reproducible. The model quality
+is deliberately unremarkable; the machinery around it is the deliverable.
+
+**Step 1 — MLflow server, composed** (`docker-compose.yml` + `tracking.py`)
+- MLflow v3.15.1 (matching the locked client — server/client skew is R9) with a
+  sqlite backend on a local volume; proven to survive container restarts. Port 5001
+  because macOS AirPlay squats on 5000. `setup_tracking()` *raises* when the server
+  is down: a run that cannot be tracked should fail, not run untracked.
+
+**Step 2 — Three baselines, protocol-evaluated** (`train.py`)
+- Prior (everyone gets the training default rate): PR-AUC 0.1835 = prevalence,
+  ROC 0.500, cost 0.918/loan @5:1 — the floor, and its predictability is itself a
+  system check (it caught a real bug — see below).
+- Logistic: PR-AUC 0.3236, ROC 0.695, cost 0.625. LightGBM (zero-search, params
+  fixed per Charter non-goal 8): PR-AUC 0.3446, ROC 0.709, cost 0.610.
+- All metrics on VALIDATION's labelled subset with coverage (0.821) logged beside
+  them; full 3:1–8:1 cost band logged; holdout untouched.
+- *The bug story:* first real run reported expected cost 0.000 — impossible, since
+  the prior must pay ~5× the default rate. Two pandas Series with different indexes
+  had silently aligned-to-nothing. Found by *reading* the results against a known
+  expectation; fixed with a regression test. Predictable metrics are canaries.
+
+**Step 3 — Lineage enforced, not encouraged** (`start_tracked_run`)
+- The only sanctioned way to open a run gathers git commit (+dirty flag), raw-data
+  md5 (from the DVC pointer) and holdout-manifest sha *before* the run starts, and
+  raises if any fact is unresolvable. An untraceable run is worse than no run.
+
+**Step 4 — Reproduce-from-run-ID, demonstrated** (`scripts/reproduce_run.py`,
+`docs/REPRODUCIBILITY.md`)
+- The script refuses unless the environment matches the recorded lineage exactly,
+  re-executes the entrypoint, compares protocol metrics. Live result: **delta 0.0
+  on every metric** — bit-exact. Charter §4.2, cashed. Boundary stated honestly:
+  same-machine claim, no cross-platform bit-exactness asserted.
+- *Interview line: "hand me a run ID from six weeks ago and I'll hand you the same
+  numbers — the script that proves it is in the repo, with its transcript."*
+
+**Step 5 — The DAG** (`flows.py`, Prefect)
+- ingest → contract-gate → three trainings as retryable, observable tasks; the
+  contract is a *pipeline gate*, so bad data stops the flow before any model sees
+  it. Prefect records execution; MLflow records results. The flow's three runs
+  matched the standalone metrics to every digit — determinism straight through the
+  orchestration layer.
+
+**P5 exit state:** three baselines logged with full lineage; any run reproducible
+from its ID alone (demonstrated); training runs as one orchestrated flow.
+
+---
+
+*Next section: P6 — selection, calibration, decision policy, added at P6 exit.*
