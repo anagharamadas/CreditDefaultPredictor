@@ -28,6 +28,7 @@ pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
     "realdata: needs the local interim parquet; CI runs `-m 'not realdata'`",
+    "services: needs local docker compose services (mlflow, later postgres)",
 ]
 
 [tool.ruff]

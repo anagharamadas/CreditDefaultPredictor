@@ -1,0 +1,27 @@
+# Local-first infrastructure (Charter §6). Services accrete per phase:
+# P5 mlflow -> P8 api + postgres. Everything stateful lives in gitignored
+# local volumes; nothing here costs money or leaves the machine.
+services:
+  mlflow:
+    # Same version as the uv.lock client — server/client skew is a real
+    # MLflow failure mode (R9).
+    image: ghcr.io/mlflow/mlflow:v3.15.1
+    container_name: cdp-mlflow
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+      --serve-artifacts
+      --host 0.0.0.0
+      --port 5000
+    ports:
+      - "5001:5000"   # host 5001: macOS AirPlay occupies 5000
+    volumes:
+      - ./.mlflow:/mlflow   # sqlite backend + artifacts; survives container restarts
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
