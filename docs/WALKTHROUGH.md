@@ -394,4 +394,43 @@ seal broken exactly once, on the record.
 
 ---
 
-*Next section: P7 — packaging & registry, added at P7 exit.*
+## P7 — Packaging & registry
+
+**The problem P7 solves:** the chosen model becomes a *deployable, promotable,
+revocable thing* with its provenance attached — instead of a pickle in a folder.
+
+**Step 1 — Registration** (`registry.py`)
+- `credit-default-granting` v1 registered from the specific ADR-0004 run (pinned
+  by run ID in code — the selection was a decision about a run, not "latest").
+  Version tags chain registry → run → lineage tags → exact commit/data/splits.
+- The artifact was already pipeline+model as one object (the P4 design); the
+  registry makes it versioned and addressable. Serving loads
+  `models:/credit-default-granting@champion` and **nothing else**.
+
+**Step 2 — The lifecycle as alias moves**
+- MLflow 3.x removed registry "stages"; aliases implement the same lifecycle
+  (`@staging` = under review, `@champion` = serving) — the ticket's intent
+  honoured under the current API, with the adaptation recorded (ADR-0001's
+  verify-against-pinned-version discipline paying off).
+- Promotion IS an alias move; **rollback is the same move backwards** — rehearsed
+  in a self-cleaning test: v2 promoted, then the alias returned to v1. That
+  one-line gesture is P11's rollback path, already proven.
+- *Interview line: "deploy and rollback are the same recorded operation in my
+  registry — moving one alias — so rollback needs no special machinery to trust."*
+
+**Step 3 — The model card** (`docs/MODEL_CARD.md`)
+- Intended use, training vintages + censoring assumptions, protocol metrics with
+  coverage stated, ADR-0004's accepted negatives (drift under-prediction, ECE
+  growth), Charter §8 limitations carried over, the R7 fairness framing, and an
+  explicit **prohibited uses** list (60-month loans, other markets, pricing,
+  automated adverse decisions, compliance claims).
+- A small test pins the card's load-bearing content: the source run ID, coverage,
+  [ASSUMED], "not legal advice", the scope exclusions — the card cannot silently
+  lose its caveats.
+
+**P7 exit state:** one registered artifact, promotable and revocable by recorded
+alias moves, described by a card that leads with what it must not be used for.
+
+---
+
+*Next section: P8 — serving API, added at P8 exit.*
