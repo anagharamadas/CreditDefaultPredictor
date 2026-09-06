@@ -339,4 +339,59 @@ from its ID alone (demonstrated); training runs as one orchestrated flow.
 
 ---
 
-*Next section: P6 — selection, calibration, decision policy, added at P6 exit.*
+## P6 — Selection, calibration, decision policy
+
+**The problem P6 solves:** choose one model, honestly — with every choice made by
+rules frozen before any model existed, and the holdout opened exactly once at the end.
+
+**Step 1 — Evaluation harness** (`evaluation.py`)
+- Comparisons score models loaded FROM their MLflow artifacts (`runs:/<id>/model`),
+  not retrained lookalikes; each comparison is itself a lineage-tagged run with the
+  ranked table attached. The holdout door is guarded at this layer too: the split
+  function refuses without the spelled-out acknowledgment, then verifies the frozen
+  manifest end-to-end and cross-checks the frame against the frozen ID list.
+
+**Step 2 — Calibration: assessed, method built, REJECTED** (`calibration.py`)
+- The reliability table showed *systematic under-prediction* (mean 0.157 vs observed
+  0.184) with the diagnosis in its shape: base-rate drift, not classifier distortion.
+- The window-honest isotonic scheme (base model 2013-01..2015-06, calibrator
+  2015-07..2015-12 — out-of-sample for the model, inside the train window) made
+  everything worse: a within-window calibrator can only learn the past's rate, and
+  the shortened fit window costs six months of data plus the whole 2015+ bureau
+  block. Decision: keep uncalibrated; the obligation moves to P10 monitoring.
+- *Interview line: "I built the calibrator, measured it, and rejected it with
+  evidence — 'assessed calibration' doesn't mean 'applied a calibrator'."*
+
+**Step 3 — The operating points** (`decision_policy.py` → DECISION_POLICY.md)
+- θ stays a derivation (a test greps the module and forbids score-maximising
+  statistics). At the 5:1 baseline: decline 38.7%, funded-book default rate
+  18.4%→11.1%, declined pool defaults at 2.7× funded, 33.5% saving vs
+  fund-everyone. The 3:1→8:1 band swings declines 17%→61% — the quantified case
+  for the open cost-ratio research (issue #70).
+
+**Step 4 — Slices** (`slices.py` → SLICE_REPORT.md)
+- 39 slices; 8 flagged, coherently: high-FICO bands rank hard at low base rates,
+  three small purposes discriminate weakly, and late-validation months show the
+  drift gap growing monotonically (−5.5→−7.2pp). **No state or income slice
+  flagged** — the calibration gap is a time phenomenon, not concentrated in any
+  proxy group. Framed throughout as the R7 documentation obligation, never a
+  compliance claim.
+
+**Step 5 — Selection justified, holdout opened once** (`p6_final_report.py`,
+ADR-0004)
+- The lightgbm-vs-logistic margin passed a month-stratified bootstrap:
+  +0.0209 PR-AUC, 95% CI [+0.0177, +0.0242] — excludes zero, so the
+  simpler-model tie rule doesn't bind.
+- Then, with the acknowledgment spelled out and the manifest verified, the holdout
+  opened for the one-shot final report (coverage 0.604, stated): PR-AUC 0.3767,
+  ranking preserved, ECE worsened to 0.064 — drift deepening on schedule. ADR-0004
+  records the selection, the rejections (including the calibrator, with its
+  structural reason), and the accepted consequences.
+
+**P6 exit state:** selection justified against baselines on later vintages;
+calibration assessed; threshold derived, not tuned; slices reported; the holdout's
+seal broken exactly once, on the record.
+
+---
+
+*Next section: P7 — packaging & registry, added at P7 exit.*
