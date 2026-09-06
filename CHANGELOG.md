@@ -9,6 +9,21 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P6 — via feature/p6-selection)
+- Evaluation harness scoring tracked artifacts on later vintages; comparisons are
+  themselves lineage-tagged runs. Holdout guarded at this layer (acknowledgment +
+  manifest verify + ID cross-check).
+- Calibration assessed: isotonic method built window-honest and REJECTED on evidence
+  (base-rate drift is the miscalibration; a within-window calibrator can't fix it).
+- Decision policy (generated doc + tracked run): 5:1 declines 38.7% / cost 0.610 /
+  saving 33.5%; band swings declines 17–61% (the issue-#70 case, quantified).
+- Slice report: 39 slices, 8 flagged coherently; no state/income slice flagged; R7
+  framing throughout.
+- ADR-0004: LightGBM uncalibrated selected — margin bootstrap-real
+  (+0.0209, CI [+0.0177,+0.0242]); holdout opened ONCE for the final report
+  (PR-AUC 0.3767, coverage 0.604 stated; ECE drift-worsened to 0.064, accepted and
+  routed to P10/P11). docs/P6_FINAL_REPORT.md.
+
 ### Added (P5 — via feature/p5-baselines)
 - MLflow v3.15.1 tracking server in Docker Compose (sqlite volume, restart-proven);
   `tracking.py` with fail-if-untracked posture; `services` pytest marker.
