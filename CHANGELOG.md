@@ -9,6 +9,17 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P7 — via feature/p7-packaging)
+- `credit-default-granting` v1 registered from the ADR-0004 run; version tags chain
+  to full lineage. Alias lifecycle (staging/champion) replaces MLflow-3-removed
+  stages, adaptation recorded; promotion and rollback demonstrated as alias moves
+  (self-cleaning lifecycle test). Standalone load via registry address scored the
+  parity fixture.
+- `docs/MODEL_CARD.md` for v1: intended use, prohibited uses, training data + label
+  rule, protocol metrics with coverage, measured limitations (drift
+  under-prediction, resolved-subset bias), R7 fairness framing, maintenance
+  obligations. Consistency-pinned by test.
+
 ### Added (P6 — via feature/p6-selection)
 - Evaluation harness scoring tracked artifacts on later vintages; comparisons are
   themselves lineage-tagged runs. Holdout guarded at this layer (acknowledgment +
