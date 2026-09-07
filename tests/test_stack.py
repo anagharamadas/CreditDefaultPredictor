@@ -35,13 +35,30 @@ def _post(path: str, payload: dict):
     request = urllib.request.Request(
         f"{API}{path}",
         data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+        # tag the traffic: the store's `source` column exists to separate live
+        # requests from replay and test traffic
+        headers={"Content-Type": "application/json", "X-Source": "pytest-stack"},
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return response.status, json.load(response)
     except urllib.error.HTTPError as exc:
         return exc.code, json.load(exc)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _clean_store_afterwards():
+    """Stack tests write real rows; remove their own traffic when done."""
+    yield
+    from contextlib import suppress
+
+    from credit_default.store import open_pool
+
+    with suppress(Exception):
+        pool = open_pool()
+        with pool.connection() as conn:
+            conn.execute("DELETE FROM predictions WHERE source = 'pytest-stack'")
+        pool.close()
 
 
 @pytest.fixture(scope="module")
