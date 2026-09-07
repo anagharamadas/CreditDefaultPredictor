@@ -9,6 +9,25 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P8 — via feature/p8-serving)
+- FastAPI serving app: two-layer validation (pydantic structure generated from the
+  ingest/contract constants; the training Pandera contract for bounds and
+  invariants), champion-only model loading via `MODEL_ALIAS`, health/readiness.
+- Compose stack (api + postgres + mlflow) with env-overridable config,
+  `.env.example`, non-root image built from the same `uv.lock`.
+- Prediction store: `issue_d` separate from `scored_at`, JSONB features, decision
+  policy recorded, no label column; mandatory-write policy makes it a readiness
+  dependency.
+- Structured JSON logging with request IDs threaded via ContextVar; privacy rule
+  (column names, never values) verified in-container.
+- `docs/SERVING_DEMO.md`: cold start to scored request in 8s, measured; failure
+  modes table; honest prerequisite chain for a fresh clone.
+
+### Fixed
+- MLflow 3.x rejected the compose service name via DNS-rebinding protection
+  (`--allowed-hosts`).
+- `registry.*` silently used a local store when callers omitted `setup_tracking()`.
+
 ### Added (P7 — via feature/p7-packaging)
 - `credit-default-granting` v1 registered from the ADR-0004 run; version tags chain
   to full lineage. Alias lifecycle (staging/champion) replaces MLflow-3-removed

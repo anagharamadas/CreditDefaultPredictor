@@ -24,5 +24,17 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ ./src/
 ENV PYTHONPATH=/app/src
 
+# Run unprivileged: nothing here needs root, and a scoring service reachable over
+# the network is exactly the process that should not have it. The home directory
+# exists because MLflow writes a download cache there when fetching model
+# artifacts from the registry.
+RUN useradd --create-home --uid 10001 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
+LABEL org.opencontainers.image.title="credit-default-granting API" \
+      org.opencontainers.image.source="https://github.com/anagharamadas/CreditDefaultPredictor" \
+      org.opencontainers.image.description="Serves the registry champion model behind the training data contract."
+
 EXPOSE 8000
 CMD ["uvicorn", "credit_default.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -433,4 +433,71 @@ alias moves, described by a card that leads with what it must not be used for.
 
 ---
 
-*Next section: P8 — serving API, added at P8 exit.*
+## P8 — Serving API
+
+**The problem P8 solves:** the registered model becomes a service that scores real
+requests — enforcing the *same* contract training used, recording every decision,
+and refusing to operate when it cannot do either.
+
+**Step 1 — Two-layer validation** (`api/schemas.py`, `api/app.py`)
+- pydantic handles *structure* (field names, types, closed category vocabularies,
+  `extra="forbid"`) — and the schema is **generated from the same constants** that
+  drive ingest and the contract, so it cannot drift from them.
+- Pandera handles *bounds and cross-column invariants* — and it is literally the
+  training contract object with `loan_status` removed, not a serving copy. Between
+  them sits the #28 converter the parity tests hold byte-identical.
+- *Interview line: "my API can't enforce a different contract than training did —
+  it imports the same object."*
+
+**Step 2 — The champion, and nothing else** (`registry_model_loader`)
+- The model arrives only via `models:/credit-default-granting@champion`.
+  `MODEL_ALIAS` selects the alias; promotion and rollback (P11) move that alias —
+  **the service is never redeployed to change models**.
+
+**Step 3 — The Compose stack** (`Dockerfile`, `docker-compose.yml`)
+- api + postgres + mlflow, every value env-overridable with a working default.
+  The image installs from the same `uv.lock` the laptop syncs, so container and
+  dev environment run identical versions; it runs unprivileged (uid 10001).
+- Two real integration bugs surfaced here that no unit test could have found:
+  MLflow 3.x's DNS-rebinding protection 403-ing the compose service name, and
+  `registry.load()` silently falling back to a local store when the caller forgot
+  to set the tracking URI. Both fixed with the reason recorded at the fix.
+
+**Step 4 — The prediction store** (`store.py`)
+- Designed for its consumers, not as a log: `issue_d` stored **separately** from
+  `scored_at` (replaying three years in an afternoon makes every `scored_at`
+  "today" — the vintage is the axis drift is measured along), features as JSONB
+  so a v2 feature set needs no migration, the decision policy in force stored so
+  a past decision stays auditable against the assumption behind it, and
+  deliberately **no label column** — outcomes arrive months later and are joined
+  at analysis time.
+- **Write policy: a credit decision that cannot be recorded is not made.** The
+  store is a readiness dependency. Demonstrated by stopping Postgres mid-flight:
+  `/score` returns 503 "decision not recorded, so not returned"; on restore the
+  pool self-heals.
+
+**Step 5 — Traceable operations** (`api/logging_config.py`)
+- One request id per request, held in a `ContextVar`, so every log line below
+  inherits it without being passed it; echoed in the response header. Logs are
+  JSON, one object per line.
+- Privacy rule, verified rather than asserted: rejections log the loan id and the
+  *violated column names* — never feature values. A grep of the container logs for
+  the rejected value returned zero hits. The full payload lives in the store,
+  behind database access; logs are the wider surface and get less.
+
+**Step 6 — Cold start** (`docs/SERVING_DEMO.md`)
+- `docker compose down -v` → `up` → **first scored request in 8 seconds**, with
+  the API installing its own database schema into the empty volume. The teardown
+  asymmetry is deliberate: prediction history is disposable (the replay rebuilds
+  it), the model registry is not.
+- The doc states the prerequisite chain honestly: a genuinely fresh clone needs
+  data → ingest → training → registration before it can score, which is why P12's
+  five-minute demo will need a seeded shortcut rather than pretending otherwise.
+
+**P8 exit state:** a containerised service that enforces the training contract,
+serves only the registry champion, records every decision with its vintage, traces
+every request end to end, and fails closed when it cannot do those things.
+
+---
+
+*Next section: P9 — CI/CD, added at P9 exit.*
