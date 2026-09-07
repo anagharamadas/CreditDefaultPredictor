@@ -1,40 +1,11 @@
 """API skeleton: schemas mirror the contract, the contract gates scoring, readiness."""
 
-import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
 from credit_default.api import create_app
-from credit_default.features.serving import frame_to_payloads
-from credit_default.ingest import read_accepted
 
-
-class StubModel:
-    """Deterministic scores, no registry needed."""
-
-    def predict_proba(self, frame):
-        p = np.full(len(frame), 0.42)
-        return np.column_stack([1 - p, p])
-
-
-def stub_loader():
-    return StubModel(), "stub-model", 7
-
-
-def failing_loader():
-    raise ConnectionError("registry unreachable")
-
-
-@pytest.fixture(scope="module")
-def payload():
-    fixture = read_accepted("tests/fixtures/parity_sample.csv", strict=False)
-    return frame_to_payloads(fixture.head(1))[0]
-
-
-@pytest.fixture()
-def client():
-    with TestClient(create_app(model_loader=stub_loader, store_opener=None)) as c:
-        yield c
+# StubModel, stub_loader, failing_loader, payload and client come from conftest.py
 
 
 def test_health_is_always_up(client):
@@ -48,7 +19,7 @@ def test_ready_reports_the_loaded_model(client):
     assert body["model_version"] == 7
 
 
-def test_ready_is_503_when_the_model_cannot_load(payload):
+def test_ready_is_503_when_the_model_cannot_load(payload, failing_loader):
     with TestClient(create_app(model_loader=failing_loader, store_opener=None)) as c:
         r = c.get("/ready")
         assert r.status_code == 503

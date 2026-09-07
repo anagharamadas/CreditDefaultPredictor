@@ -5,23 +5,14 @@ import logging
 from io import StringIO
 
 import pytest
-from fastapi.testclient import TestClient
-from tests.test_api import stub_loader
 
-from credit_default.api import create_app
 from credit_default.api.logging_config import (
     REQUEST_ID_HEADER,
     JsonFormatter,
     request_id_var,
 )
-from credit_default.features.serving import frame_to_payloads
-from credit_default.ingest import read_accepted
 
-
-@pytest.fixture(scope="module")
-def payload():
-    fixture = read_accepted("tests/fixtures/parity_sample.csv", strict=False)
-    return frame_to_payloads(fixture.head(1))[0]
+# payload and client come from conftest.py
 
 
 @pytest.fixture()
@@ -41,12 +32,6 @@ def captured_logs():
 
     yield read
     root.handlers, root.level = previous, previous_level
-
-
-@pytest.fixture()
-def client():
-    with TestClient(create_app(model_loader=stub_loader, store_opener=None)) as c:
-        yield c
 
 
 def test_formatter_emits_one_json_object_with_extras():
