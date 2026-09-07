@@ -14,9 +14,15 @@ __pycache__/
 venv/
 .ipynb_checkpoints/
 
+# Secrets / local config — .env.example is the committed template
+.env
+
 # Tooling state
 # .mlflow/ is the compose-mounted mlflow backend + artifact store
 .mlflow/
+# mlruns/ and mlflow.db appear only when a client forgets the tracking URI and
+# falls back to local storage (see registry._point_at_the_project_server)
 mlruns/
+mlflow.db
 mlartifacts/
 .dvc/cache

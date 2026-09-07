@@ -16,6 +16,13 @@ Items here are legitimate extensions that are out of v1 scope by charter decisio
    the v1 matured-vintages policy cannot cover them.
 5. **Cloud demo deployment.** Short-lived, tear-down scripted, within the $20 ceiling.
    Decision deferred to P8 per charter.
+7. **Slim the serving image with `mlflow-skinny`.** The API image is ~1.8 GB,
+   dominated by the full `mlflow` package pulled in for its *client*. Our code
+   never runs a tracking server (the compose service uses the official image), so
+   the skinny client would likely suffice. Deferred because it is a project-wide
+   dependency change (training and registry code use the same package) for a
+   benefit — image size — that no stated constraint currently requires. Revisit if
+   the P8 deploy-target decision lands somewhere size-sensitive.
 6. **Research the FN:FP cost ratio (review ADR-0003).** — GitHub issue #70; the one
    backlog item with a deadline (before the P6 retro). ADR-0003's 5:1 ratio is
    order-of-magnitude reasoning, not evidence; the operating threshold is fully
