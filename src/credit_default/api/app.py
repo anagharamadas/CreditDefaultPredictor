@@ -30,12 +30,19 @@ THRESHOLD = derive_threshold()
 
 
 def registry_model_loader():
-    """Production loader: the registry address, nothing else."""
+    """Production loader: the registry address, nothing else.
+
+    MODEL_ALIAS selects which alias to serve (default `champion`). Promotion and
+    rollback move that alias in the registry — this service is not redeployed.
+    """
+    import os
+
     from credit_default.registry import CHAMPION, MODEL_NAME, load, resolve
     from credit_default.tracking import setup_tracking
 
+    alias = os.environ.get("MODEL_ALIAS", CHAMPION)
     setup_tracking()
-    return load(CHAMPION), MODEL_NAME, resolve(CHAMPION)
+    return load(alias), MODEL_NAME, resolve(alias)
 
 
 def create_app(model_loader: Callable = registry_model_loader) -> FastAPI:

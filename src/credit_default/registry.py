@@ -19,7 +19,7 @@ from __future__ import annotations
 import mlflow
 from mlflow import MlflowClient
 
-from credit_default.tracking import setup_tracking
+from credit_default.tracking import setup_tracking, tracking_uri
 
 MODEL_NAME = "credit-default-granting"
 
@@ -29,12 +29,20 @@ ADR_0004_RUN_ID = "e299b8e7489e4e9186b3680c39b45166"
 STAGING, CHAMPION = "staging", "champion"
 
 
+def _point_at_the_project_server() -> None:
+    """Every public function calls this. Without it MLflow silently falls back to a
+    local ./mlruns store and reports a missing model rather than a missing server —
+    a confusing failure that cost a debugging round when the stack test hit it."""
+    mlflow.set_tracking_uri(tracking_uri())
+
+
 def register_run(run_id: str, name: str = MODEL_NAME) -> int:
     """Register a run's model artifact; returns the new version number.
 
     Version tags carry the audit trail: the source run (whose own tags hold the
     full lineage) and the ADR that justified it.
     """
+    _point_at_the_project_server()
     version = mlflow.register_model(f"runs:/{run_id}/model", name)
     client = MlflowClient()
     client.set_model_version_tag(name, version.version, "source_run_id", run_id)
@@ -45,16 +53,19 @@ def register_run(run_id: str, name: str = MODEL_NAME) -> int:
 def promote(version: int, alias: str, name: str = MODEL_NAME) -> None:
     """Point an alias at a version. Serving only ever reads @champion, so moving
     that alias IS deployment — and moving it back IS rollback (P11's path)."""
+    _point_at_the_project_server()
     MlflowClient().set_registered_model_alias(name, alias, str(version))
 
 
 def resolve(alias: str, name: str = MODEL_NAME) -> int:
     """Which version an alias currently points at."""
+    _point_at_the_project_server()
     return int(MlflowClient().get_model_version_by_alias(name, alias).version)
 
 
 def load(alias: str = CHAMPION, name: str = MODEL_NAME):
     """The one loading path serving uses: registry name + alias, nothing else."""
+    _point_at_the_project_server()
     return mlflow.sklearn.load_model(f"models:/{name}@{alias}")
 
 

@@ -14,6 +14,9 @@ __pycache__/
 venv/
 .ipynb_checkpoints/
 
+# Secrets / local config — .env.example is the committed template
+.env
+
 # Tooling state
 # .mlflow/ is the compose-mounted mlflow backend + artifact store
 .mlflow/

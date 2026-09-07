@@ -1,12 +1,17 @@
-# Local-first infrastructure (Charter §6). Services accrete per phase:
-# P5 mlflow -> P8 api + postgres. Everything stateful lives in gitignored
-# local volumes; nothing here costs money or leaves the machine.
+# Local-first infrastructure (Charter §6). Every value is env-overridable with a
+# working default, so `docker compose up` runs with or without a .env
+# (see .env.example). Nothing here costs money or leaves the machine.
 services:
   mlflow:
     # Same version as the uv.lock client — server/client skew is a real
     # MLflow failure mode (R9).
     image: ghcr.io/mlflow/mlflow:v3.15.1
     container_name: cdp-mlflow
+    # --allowed-hosts: MLflow 3.x rejects unknown Host headers (DNS-rebinding
+    # protection). Its default allows localhost and private IPs, but NOT the
+    # compose service name, so the API's `Host: mlflow:5000` is refused with a
+    # 403 until the name is listed here. Host-side access keeps working via the
+    # localhost/127.0.0.1 entries.
     command: >
       mlflow server
       --backend-store-uri sqlite:////mlflow/mlflow.db
@@ -14,8 +19,9 @@ services:
       --serve-artifacts
       --host 0.0.0.0
       --port 5000
+      --allowed-hosts mlflow:5000,localhost:5000,localhost:5001,127.0.0.1:5000,127.0.0.1:5001
     ports:
-      - "5001:5000"   # host 5001: macOS AirPlay occupies 5000
+      - "${MLFLOW_PORT:-5001}:5000"   # host 5001: macOS AirPlay occupies 5000
     volumes:
       - ./.mlflow:/mlflow   # sqlite backend + artifacts; survives container restarts
     restart: unless-stopped
@@ -25,3 +31,53 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  postgres:
+    # The prediction store: every scored request persisted for the P10 replay
+    # and P11 retraining (schema in #47).
+    image: postgres:16-alpine
+    container_name: cdp-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-credit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-predictions}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-credit} -d ${POSTGRES_DB:-predictions}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  api:
+    build: .
+    container_name: cdp-api
+    environment:
+      # Service name, not localhost: the API reaches the tracking server across
+      # the compose network, and fetches model artifacts through it
+      # (--serve-artifacts proxies them, so no shared volume is needed).
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-credit}:${POSTGRES_PASSWORD:-local-dev-only}@postgres:5432/${POSTGRES_DB:-predictions}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # /health is liveness; /ready (model loaded) is checked by callers.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  pgdata:

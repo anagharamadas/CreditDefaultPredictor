@@ -1,0 +1,18 @@
+# Build context stays small and secret-free.
+.git/
+.venv/
+.mlflow/
+.dvc/cache/
+data/
+docs/
+tests/
+scripts/
+notebooks/
+*.csv
+*.csv.gz
+*.parquet
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
