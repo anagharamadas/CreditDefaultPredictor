@@ -80,10 +80,13 @@ class ScoreResponse(BaseModel):
     model_name: str
     model_version: int
     scored_at: datetime
+    #: set once the decision is persisted; the caller's receipt for an audited decision
+    prediction_id: str | None = None
 
 
 class ReadyResponse(BaseModel):
     ready: bool
     model_name: str | None = None
     model_version: int | None = None
+    store_ready: bool = False
     detail: str | None = None

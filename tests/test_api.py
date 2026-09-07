@@ -33,7 +33,7 @@ def payload():
 
 @pytest.fixture()
 def client():
-    with TestClient(create_app(model_loader=stub_loader)) as c:
+    with TestClient(create_app(model_loader=stub_loader, store_opener=None)) as c:
         yield c
 
 
@@ -49,7 +49,7 @@ def test_ready_reports_the_loaded_model(client):
 
 
 def test_ready_is_503_when_the_model_cannot_load(payload):
-    with TestClient(create_app(model_loader=failing_loader)) as c:
+    with TestClient(create_app(model_loader=failing_loader, store_opener=None)) as c:
         r = c.get("/ready")
         assert r.status_code == 503
         assert "registry unreachable" in r.json()["detail"]
