@@ -28,6 +28,52 @@ from credit_default.train import evaluate
 
 BASELINE_FAMILIES = ("prior", "logistic", "lightgbm")
 
+#: bootstrap defaults — enough resamples for a stable 95% interval, fixed seed so a
+#: comparison is reproducible like everything else here
+N_BOOT = 500
+BOOT_SEED = 20260904
+
+
+def month_stratified_bootstrap(
+    x: pd.DataFrame,
+    y,
+    scores_a,
+    scores_b,
+    metrics: dict,
+    n_boot: int = N_BOOT,
+    seed: int = BOOT_SEED,
+) -> dict[str, tuple[float, float, float]]:
+    """95% CI for metric(a) - metric(b), resampling loans WITHIN vintage months.
+
+    Stratifying by month keeps each resample's vintage mix intact — a plain
+    bootstrap would let a resample over-weight a month and mix drift into what is
+    meant to be sampling noise.
+
+    All metrics share the same resamples (one pass, and the differences stay
+    comparable). Returns {name: (mean_diff, lo, hi)}; an interval strictly above
+    zero means a is genuinely better on that metric.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    months = x["issue_d"].dt.to_period("M").astype(str).to_numpy()
+    y = np.asarray(y, dtype=float)
+    a, b = np.asarray(scores_a, dtype=float), np.asarray(scores_b, dtype=float)
+    index_by_month = [np.flatnonzero(months == m) for m in np.unique(months)]
+
+    diffs = {name: np.empty(n_boot) for name in metrics}
+    for i in range(n_boot):
+        sample = np.concatenate(
+            [rng.choice(ix, size=len(ix), replace=True) for ix in index_by_month]
+        )
+        for name, metric in metrics.items():
+            diffs[name][i] = metric(y[sample], a[sample]) - metric(y[sample], b[sample])
+
+    return {
+        name: (float(d.mean()), *(float(v) for v in np.percentile(d, [2.5, 97.5])))
+        for name, d in diffs.items()
+    }
+
 
 def split_features(
     split_name: str,
