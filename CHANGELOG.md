@@ -22,6 +22,11 @@ This file records *what* changed; *why* lives in the charter revision notes and
   a tie and passing a genuine improvement.
 - `docs/TESTING.md`: the strategy, the promise→test map, what CI deliberately cannot
   do, and both gate criteria.
+- `docs/E2E_WALKTHROUGH.md`: the full chain exercised once (raw → parquet → flow
+  training → gate → register → promote → serve → stored prediction), with timings.
+  Confirmed determinism across a full retrain and that the frozen holdout reproduces
+  from raw. Found two integration gaps, filed as #79 (serving caches its champion, so
+  alias-move rollback needs a restart) and #80 (665k sequential replay ≈ 6 hours).
 - Shared month-stratified bootstrap in `evaluation.py` (several metrics from the same
   resamples), replacing the copy inside the P6 script; verified to reproduce
   ADR-0004's published interval before switching.

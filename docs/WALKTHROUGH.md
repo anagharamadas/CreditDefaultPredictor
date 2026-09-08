@@ -552,6 +552,25 @@ survives unnoticed.
 - Stated rather than papered over: a green CI badge means *the code is sound*, not
   *the model is approved*. Two different claims, deliberately kept apart.
 
+**Step 5 — Connect everything once and look for seams**
+(`docs/E2E_WALKTHROUGH.md`)
+- Every component had passing tests; this asked a different question — do they work
+  when *connected*? Raw file → parquet (26s) → flow training (28s) → quality gate →
+  register → promote → serve → stored prediction, walked once, deliberately.
+- Two good results: a full retrain from freshly rebuilt data produced a model
+  measurably **identical** to the incumbent (difference 0.00000, CI [0, 0]) — so the
+  gate blocked it as a tie, correctly; and the frozen holdout re-verified against the
+  rebuilt parquet, proving those 152,838 IDs are a function of raw data and rules
+  rather than of a convenient intermediate file.
+- **Two gaps found, neither reachable by a unit test.** The service caches its
+  champion at startup, so moving the registry alias does nothing until a restart —
+  which means P7's one-line rollback gesture is incomplete, and predictions can be
+  recorded under a stale `model_version` (issue #79). And at 32ms a request, replaying
+  665k loans sequentially takes ~6 hours, which would quietly kill the repeatability
+  that makes the replay worth building (issue #80).
+- *Interview line: "the integration exercise found that my rollback wouldn't have
+  worked — before the phase that depends on it, rather than during."*
+
 ---
 
 *Next section: P10 — drift, replay, observability, added at P10 exit.*
