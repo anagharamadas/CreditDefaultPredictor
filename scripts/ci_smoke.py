@@ -55,9 +55,22 @@ def main() -> int:
     assert np.all((probabilities >= 0) & (probabilities <= 1))
 
     print("smoke: serving round trip (JSON out, JSON in, same numbers)")
-    payloads = frame_to_payloads(x.head(5))
-    served = model.predict_proba(payloads_to_frame(payloads))[:, 1]
-    assert np.array_equal(probabilities[:5], served), "train/serve parity broken"
+    # Compare like-shaped batches. An earlier version checked `probabilities[:5]`
+    # (five rows computed inside a 21-row batch) against a 5-row batch and demanded
+    # bit-equality — which is not a parity check but a claim that BLAS accumulates
+    # identically at different matrix shapes. Nothing guarantees that: it held on
+    # arm64 and failed on the x86 CI runner. The guarantee this project actually
+    # makes is about the TRANSFORM, which is elementwise and so is bit-exact.
+    sample = x.head(5)
+    served_frame = payloads_to_frame(frame_to_payloads(sample))
+
+    features = model.named_steps["features"]
+    assert np.array_equal(features.transform(sample), features.transform(served_frame)), (
+        "train/serve feature parity broken"
+    )
+    direct = model.predict_proba(sample)[:, 1]
+    served = model.predict_proba(served_frame)[:, 1]
+    assert np.array_equal(direct, served), "train/serve prediction parity broken"
 
     threshold = derive_threshold()
     decisions = ["decline" if p >= threshold else "fund" for p in served]
