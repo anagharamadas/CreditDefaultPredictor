@@ -9,6 +9,27 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P9 — via feature/p9-cicd)
+- GitHub Actions CI: four tiers (lockfile reproducibility, lint, 139-test suite,
+  entrypoint smoke, generated-doc sync) on every push to main and every PR, in a
+  fresh clone with no raw data and no services. Invokes plain `pytest` deliberately.
+- `scripts/ci_smoke.py`: the real entrypoints exercised as a program on the committed
+  fixture — ingest → contract → labels → pipeline → model → serving round trip →
+  threshold → decision.
+- `src/credit_default/quality_gate.py`: candidate-vs-incumbent gate with three
+  protocol rules (ranking improves beyond noise; calibration not degraded; ties go to
+  the incumbent), failing closed on any inability to evaluate. Demonstrated blocking
+  a tie and passing a genuine improvement.
+- `docs/TESTING.md`: the strategy, the promise→test map, what CI deliberately cannot
+  do, and both gate criteria.
+- Shared month-stratified bootstrap in `evaluation.py` (several metrics from the same
+  resamples), replacing the copy inside the P6 script; verified to reproduce
+  ADR-0004's published interval before switching.
+
+### Fixed
+- Smoke-script parity assertion compared different batch sizes and demanded
+  bit-equality — passed on arm64, failed on x86 CI. Now compares like with like.
+
 ### Added (P8 — via feature/p8-serving)
 - FastAPI serving app: two-layer validation (pydantic structure generated from the
   ingest/contract constants; the training Pandera contract for bounds and
