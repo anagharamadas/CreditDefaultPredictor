@@ -4,10 +4,13 @@ name: CI
 # they run in a place with none of a developer's local advantages: a fresh clone, no
 # raw data (1.6 GB, DVC-tracked, never committed), no Docker services, no conda env,
 # and no shell habits. An environment-dependent pass cannot survive here.
+# Feature branches are covered by their pull request, so `push` is limited to main —
+# otherwise every PR branch would run twice for the same commit.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:   # run it by hand from the Actions tab
 
 concurrency:  # a new push supersedes an in-flight run of the same branch
   group: ci-${{ github.ref }}
