@@ -49,12 +49,17 @@ def test_source_tag_is_distinct_from_live_traffic():
 
 @pytest.mark.services
 def test_a_small_slice_reaches_the_store():
-    """One month, capped, through the real API — proves the loop, not the volume."""
+    """One month, capped, through the real API — proves the loop, not the volume.
+
+    Writes under its OWN traffic tag. Sharing the real `replay` tag once caused this
+    test to delete a completed 665,090-row replay during a full-suite run.
+    """
     from credit_default.replay import clear_replay_rows, replay_month
     from credit_default.store import open_pool
 
+    tag = "pytest-replay"
     sample = replay_frame(["2017-01"]).head(20)
-    stats = replay_month(sample, workers=8)
+    stats = replay_month(sample, workers=8, source=tag)
     assert stats["failed"] == 0, stats["failure_sample"]
     assert stats["scored"] == 20
 
@@ -64,15 +69,15 @@ def test_a_small_slice_reaches_the_store():
             rows = conn.execute(
                 "SELECT issue_d, model_version, source FROM predictions"
                 " WHERE source = %s AND loan_id = ANY(%s)",
-                (SOURCE, [str(i) for i in sample["id"]]),
+                (tag, [str(i) for i in sample["id"]]),
             ).fetchall()
         assert len(rows) == 20
         # the vintage, not the scoring date, is what drift is measured along
         assert all(str(r[0]).startswith("2017-01") for r in rows)
-        assert all(r[2] == SOURCE for r in rows)
+        assert all(r[2] == tag for r in rows)
     finally:
         pool.close()
-        clear_replay_rows()
+        clear_replay_rows(tag)          # only this test's traffic
 
 
 def test_resume_skips_already_scored_loans(monkeypatch):

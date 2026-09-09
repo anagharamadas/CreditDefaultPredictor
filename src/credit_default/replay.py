@@ -75,26 +75,28 @@ def already_replayed(months: list[str] | None = None) -> set[str]:
         pool.close()
 
 
-def clear_replay_rows() -> int:
+def clear_replay_rows(source: str = SOURCE) -> int:
+    """Delete rows for one traffic tag. Defaults to the REAL replay, so callers that
+    only mean to clean up their own traffic must say which."""
     from credit_default.store import open_pool
 
     pool = open_pool()
     try:
         with pool.connection() as conn:
             deleted = conn.execute(
-                "DELETE FROM predictions WHERE source = %s", (SOURCE,)
+                "DELETE FROM predictions WHERE source = %s", (source,)
             ).rowcount
         return int(deleted)
     finally:
         pool.close()
 
 
-def _score_one(client: httpx.Client, payload: dict) -> tuple[bool, str]:
+def _score_one(client: httpx.Client, payload: dict, source: str = SOURCE) -> tuple[bool, str]:
     try:
         response = client.post(
             "/score",
             json=payload,
-            headers={"X-Source": SOURCE, "X-Request-ID": f"replay-{uuid.uuid4()}"},
+            headers={"X-Source": source, "X-Request-ID": f"replay-{uuid.uuid4()}"},
         )
     except httpx.HTTPError as exc:
         return False, f"{type(exc).__name__}: {exc}"
@@ -104,9 +106,18 @@ def _score_one(client: httpx.Client, payload: dict) -> tuple[bool, str]:
 
 
 def replay_month(
-    frame: pd.DataFrame, workers: int = DEFAULT_WORKERS, api_url: str = API_URL
+    frame: pd.DataFrame,
+    workers: int = DEFAULT_WORKERS,
+    api_url: str = API_URL,
+    source: str = SOURCE,
 ) -> dict:
-    """Score one month's loans concurrently; returns counts and timing."""
+    """Score one month's loans concurrently; returns counts and timing.
+
+    `source` tags the rows this call writes. Anything other than a real replay —
+    tests above all — must pass its own tag, so that cleaning up after itself cannot
+    touch the real replay. (A test that shared this tag once deleted a completed
+    665,090-row replay.)
+    """
     payloads = frame_to_payloads(frame.drop(columns=["month", "split", "default", "exclusion_reason"]))
     started = time.perf_counter()
     ok = 0
@@ -117,7 +128,7 @@ def replay_month(
         httpx.Client(base_url=api_url, timeout=TIMEOUT, limits=limits) as client,
         ThreadPoolExecutor(max_workers=workers) as pool,
     ):
-        for succeeded, error in pool.map(lambda p: _score_one(client, p), payloads):
+        for succeeded, error in pool.map(lambda p: _score_one(client, p, source), payloads):
             if succeeded:
                 ok += 1
             elif len(failures) < 5:  # keep a sample, not 600k strings
