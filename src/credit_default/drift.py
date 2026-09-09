@@ -35,6 +35,9 @@ import pandas as pd
 EPSILON = 1e-6
 DEFAULT_BINS = 10
 
+#: floor for a feature that never moved while stable, so its ratio stays finite
+MIN_ALERT = 0.01
+
 
 def _proportions(values: np.ndarray, edges: np.ndarray) -> np.ndarray:
     counts, _ = np.histogram(values, bins=edges)
@@ -206,7 +209,11 @@ def evaluate_against_thresholds(
     )
     merged["psi_alarm"] = merged["psi"] > merged["psi_alert"]
     merged["ks_alarm"] = merged["ks"] > merged["ks_alert"]
-    # how far past its own noise floor the feature has moved — comparable ACROSS
-    # features in a way that raw PSI is not
-    merged["psi_ratio"] = (merged["psi"] / merged["psi_alert"]).round(2)
+    # A feature that never varied during the quiet period gets a zero threshold, so
+    # any movement at all divides by zero. Flag it instead: "did something it has
+    # never done" is a different KIND of finding from "moved more than usual", and
+    # deserves to be named rather than rendered as inf.
+    merged["never_varied_in_training"] = merged["quiet_max_psi"] == 0
+    floor = merged["psi_alert"].where(merged["psi_alert"] > 0, MIN_ALERT)
+    merged["psi_ratio"] = (merged["psi"] / floor).round(2)
     return merged.sort_values("psi_ratio", ascending=False).reset_index(drop=True)

@@ -159,6 +159,18 @@ def _draw(drift_summary, naive, fixed, thresholds) -> None:
     for frame, colour, label in ((naive, BLUE, "as observed"), (fixed, ORANGE, f"{HORIZON_MONTHS}-month horizon")):
         d = frame.dropna(subset=["pr_auc"])
         axes[1].plot(pd.to_datetime(d["issue_month"]), d["pr_auc"], color=colour, linewidth=2, label=label)
+    # mark where the fixed-horizon view stops being possible, so the chart explains
+    # its own missing line rather than looking like a bug
+    complete = fixed[fixed["window_complete"]]
+    if len(complete) and len(complete) < len(fixed):
+        edge = pd.to_datetime(complete["issue_month"].iloc[-1])
+        for ax in axes[:3]:
+            ax.axvline(edge, color=MUTED, linestyle="--", linewidth=1)
+        axes[1].annotate(
+            "a 12-month view is not\npossible past this point",
+            (edge, 0.06), xytext=(8, 0), textcoords="offset points",
+            fontsize=8.5, color=MUTED, va="bottom",
+        )
     axes[1].set_title("PR-AUC — the same months, two ways of looking", loc="left", fontsize=11, color=INK)
     axes[1].legend(frameon=False, fontsize=9, labelcolor=MUTED, loc="lower left")
 

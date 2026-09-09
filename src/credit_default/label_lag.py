@@ -86,16 +86,46 @@ def known_at_horizon(timing: pd.DataFrame, horizon_months: int | None) -> pd.Dat
     return resolved[resolved["months_to_resolution"] <= horizon_months]
 
 
+def data_snapshot_month(timing: pd.DataFrame) -> pd.Period:
+    """The last month at which this dataset can observe anything.
+
+    Outcomes stop being recorded at the distribution's snapshot, so no vintage can be
+    judged over a window that extends past it.
+    """
+    resolved = timing[timing["months_to_resolution"].notna()]
+    observed = pd.PeriodIndex(resolved["issue_month"], freq="M") + resolved[
+        "months_to_resolution"
+    ].astype(int).to_numpy()
+    return observed.max()
+
+
+def is_evaluable(month: str, horizon_months: int | None, snapshot: pd.Period) -> bool:
+    """Can this vintage be judged over `horizon_months` without running past the data?
+
+    The rule is structural, not a tuned cut-off: a 12-month view of a vintage issued
+    six months before the data ends is not a weak measurement, it is an impossible
+    one. Months that fail this are reported as unevaluable rather than given a number
+    computed from whichever few loans happened to resolve early — which is exactly
+    the fast-resolver bias this module exists to avoid.
+    """
+    if horizon_months is None:
+        return True
+    return pd.Period(month, freq="M") + horizon_months <= snapshot
+
+
 def performance_by_month(
     predictions: pd.DataFrame,
     timing: pd.DataFrame,
     horizon_months: int | None,
+    snapshot: pd.Period | None = None,
 ) -> pd.DataFrame:
     """Per vintage month: coverage and metrics on whichever loans are evaluable.
 
     `predictions` needs loan_id, issue_month and p_default. Coverage is reported on
     every row because a metric without it is, per EVAL_PROTOCOL, a violation.
     """
+    if snapshot is None:
+        snapshot = data_snapshot_month(timing)
     evaluable = known_at_horizon(timing, horizon_months)
     merged = predictions.merge(
         evaluable[["loan_id", "label"]], on="loan_id", how="inner", validate="1:1"
@@ -106,6 +136,10 @@ def performance_by_month(
     for month, group in merged.groupby("issue_month", sort=True):
         y = group["label"].astype(int).to_numpy()
         p = group["p_default"].to_numpy()
+        # two independent reasons a number may be unavailable, kept separate:
+        # the observation window runs past the data (nothing is meaningful), or the
+        # evaluable loans are all one class (rates are fine, ranking is undefined)
+        window_complete = is_evaluable(month, horizon_months, snapshot)
         both_classes = 0 < y.mean() < 1
         rows.append(
             {
@@ -113,10 +147,13 @@ def performance_by_month(
                 "scored": int(scored_per_month.get(month, 0)),
                 "evaluable": len(group),
                 "coverage": round(len(group) / max(int(scored_per_month.get(month, 0)), 1), 4),
-                "default_rate": round(float(y.mean()), 4),
-                "pr_auc": round(float(average_precision_score(y, p)), 4) if both_classes else np.nan,
-                "roc_auc": round(float(roc_auc_score(y, p)), 4) if both_classes else np.nan,
-                "mean_predicted": round(float(p.mean()), 4),
+                "window_complete": window_complete,
+                "default_rate": round(float(y.mean()), 4) if window_complete else np.nan,
+                "mean_predicted": round(float(p.mean()), 4) if window_complete else np.nan,
+                "pr_auc": round(float(average_precision_score(y, p)), 4)
+                if window_complete and both_classes else np.nan,
+                "roc_auc": round(float(roc_auc_score(y, p)), 4)
+                if window_complete and both_classes else np.nan,
             }
         )
     table = pd.DataFrame(rows)
@@ -126,15 +163,20 @@ def performance_by_month(
 
 
 def compare_views(
-    predictions: pd.DataFrame, timing: pd.DataFrame, horizon_months: int = 12
+    predictions: pd.DataFrame,
+    timing: pd.DataFrame,
+    horizon_months: int = 12,
+    snapshot: pd.Period | None = None,
 ) -> pd.DataFrame:
     """The naive view beside the fixed-horizon view — the point of the ticket.
 
     Where they disagree, the naive number is reporting the passage of time as if it
     were a change in the model.
     """
-    naive = performance_by_month(predictions, timing, None)
-    fixed = performance_by_month(predictions, timing, horizon_months)
+    if snapshot is None:
+        snapshot = data_snapshot_month(timing)
+    naive = performance_by_month(predictions, timing, None, snapshot)
+    fixed = performance_by_month(predictions, timing, horizon_months, snapshot)
     return pd.concat([naive, fixed], ignore_index=True)
 
 

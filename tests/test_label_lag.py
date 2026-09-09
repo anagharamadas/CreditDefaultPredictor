@@ -6,9 +6,15 @@ import pytest
 
 from credit_default.label_lag import (
     compare_views,
+    data_snapshot_month,
+    is_evaluable,
     known_at_horizon,
     performance_by_month,
 )
+
+#: far enough in the future that the evaluability rule never fires; tests that care
+#: about that rule set their own
+OPEN_ENDED = pd.Period("2030-01", freq="M")
 
 
 def _timing(rows):
@@ -47,7 +53,7 @@ def test_coverage_is_reported_against_everything_scored():
         ("3", "2017-01", 1, 30.0),
         ("4", "2017-01", None, np.nan),
     ])
-    at_12 = performance_by_month(predictions, timing, 12)
+    at_12 = performance_by_month(predictions, timing, 12, OPEN_ENDED)
     assert at_12.loc[0, "scored"] == 4
     assert at_12.loc[0, "evaluable"] == 2
     assert at_12.loc[0, "coverage"] == 0.5   # never quoted without this
@@ -79,11 +85,11 @@ def test_fixed_horizon_removes_the_bias_that_the_naive_view_shows():
     timing = _timing(rows)
     preds = pd.DataFrame(predictions, columns=["loan_id", "issue_month", "p_default"])
 
-    naive = performance_by_month(preds, timing, None).set_index("issue_month")
+    naive = performance_by_month(preds, timing, None, OPEN_ENDED).set_index("issue_month")
     assert naive.loc["2016-01", "default_rate"] == pytest.approx(0.5)
     assert naive.loc["2017-01", "default_rate"] == pytest.approx(1.0)   # ← the illusion
 
-    fixed = performance_by_month(preds, timing, 12).set_index("issue_month")
+    fixed = performance_by_month(preds, timing, 12, OPEN_ENDED).set_index("issue_month")
     assert fixed.loc["2016-01", "default_rate"] == pytest.approx(1.0)
     assert fixed.loc["2017-01", "default_rate"] == pytest.approx(1.0)   # ← comparable
     assert fixed.loc["2016-01", "coverage"] == fixed.loc["2017-01", "coverage"]
@@ -105,7 +111,7 @@ def test_calibration_gap_sign_convention():
         "loan_id": ["1", "2"], "issue_month": ["2017-01"] * 2, "p_default": [0.1, 0.1]
     })
     timing = _timing([("1", "2017-01", 1, 6.0), ("2", "2017-01", 0, 6.0)])
-    table = performance_by_month(predictions, timing, 12)
+    table = performance_by_month(predictions, timing, 12, OPEN_ENDED)
     assert table.loc[0, "calibration_gap"] == pytest.approx(0.1 - 0.5)
 
 
@@ -121,3 +127,36 @@ def test_real_timing_shows_defaults_resolving_faster():
     default_median = resolved.loc[resolved["label"] == 1, "months_to_resolution"].median()
     repaid_median = resolved.loc[resolved["label"] == 0, "months_to_resolution"].median()
     assert default_median < repaid_median
+
+
+def test_a_vintage_too_young_for_its_horizon_is_not_reported():
+    """A 12-month view of a vintage issued 6 months before the data ends is not a
+    weak measurement — it is an impossible one. Reporting a number computed from the
+    handful that resolved early would be exactly the fast-resolver bias this module
+    exists to remove, so those months are left blank instead."""
+    predictions = pd.DataFrame({
+        "loan_id": ["1", "2"], "issue_month": ["2018-10"] * 2, "p_default": [0.9, 0.1]
+    })
+    timing = _timing([("1", "2018-10", 1, 3.0), ("2", "2018-10", 0, 3.0)])
+    snapshot = pd.Period("2019-01", freq="M")   # only 3 months after the vintage
+
+    assert not is_evaluable("2018-10", 12, snapshot)
+    table = performance_by_month(predictions, timing, 12, snapshot)
+    assert not table.loc[0, "window_complete"]
+    assert np.isnan(table.loc[0, "pr_auc"])
+    assert np.isnan(table.loc[0, "default_rate"])
+    # coverage is still reported: knowing HOW little is evaluable is the useful part
+    assert table.loc[0, "coverage"] == 1.0
+
+
+def test_the_naive_view_is_never_blocked_by_the_horizon_rule():
+    """There is no window to outrun when you are simply reporting what is known."""
+    assert is_evaluable("2018-12", None, pd.Period("2019-01", freq="M"))
+
+
+def test_snapshot_is_derived_from_the_data_not_assumed():
+    timing = _timing([
+        ("1", "2017-01", 1, 6.0),      # observed 2017-07
+        ("2", "2016-01", 0, 30.0),     # observed 2018-07  <- the latest
+    ])
+    assert data_snapshot_month(timing) == pd.Period("2018-07", freq="M")
