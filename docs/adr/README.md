@@ -15,6 +15,7 @@ The charter states each decision as a fact; the ADR holds the reasoning.
 | [0002](0002-python-environment.md) | Python environment: conda host, uv-locked deps | ACCEPTED | 2026-08-18 |
 | [0003](0003-cost-matrix.md) | Cost matrix: FN:FP = 5:1 [ASSUMED], 3:1–8:1 sensitivity | ACCEPTED | 2026-09-04 |
 | [0004](0004-model-selection.md) | v1 model: LightGBM uncalibrated (bootstrap-real margin) | ACCEPTED | 2026-09-04 |
+| [0005](0005-drift-monitoring.md) | Drift monitoring: implement a narrow metric set, no library | ACCEPTED | 2026-09-09 |
 
 ## Expected future ADRs
 
@@ -25,5 +26,5 @@ Forks already identified in the roadmap that will get an ADR when decided:
   outcome lands as a superseding ADR.
 - ~~Model selection and operating threshold (P6)~~ — done: ADR-0004 (+ threshold via ADR-0003).
 - Deploy target (by P8) — left open in ADR-0001.
-- Drift-monitoring tool: Evidently vs NannyML vs custom tests (by P10) — left open in ADR-0001.
+- ~~Drift-monitoring tool (by P10)~~ — done: ADR-0005.
 - Approval-gate design (P11).
