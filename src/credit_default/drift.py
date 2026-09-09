@@ -150,34 +150,63 @@ def calibrate_thresholds(
     numeric_features: list[str],
     categorical_features: list[str],
     safety_factor: float = 2.0,
-) -> dict:
-    """Derive alert levels from the dataset's own quiet period.
+) -> pd.DataFrame:
+    """Derive a PER-FEATURE alert level from the dataset's own quiet period.
 
     `quiet_periods` are month slices from INSIDE the training window, where the model
-    is not drifting by construction. Whatever PSI/KS those produce is this data's
-    natural month-to-month variation; the alert sits at `safety_factor` times the
-    worst of it, so an alarm means "larger than anything the stable period produced",
-    which is a statement about this dataset rather than a borrowed convention.
+    is not drifting by construction. Whatever PSI/KS a feature produces there is *that
+    feature's* natural month-to-month variation, and its alarm sits at `safety_factor`
+    times its own worst quiet value.
+
+    Per feature, not one global number, because features are not equally noisy. On
+    this data the quiet period produced PSI 0.175 for `mths_since_last_record` — a
+    feature that is 84% null, so its non-null sample is small and jumpy — while
+    well-populated features like `loan_amnt` stayed near 0.005. A single global
+    threshold set high enough not to cry wolf about the first would be far too deaf
+    to ever notice the second.
+
+    Returns one row per feature: its quiet maximum and its alert level.
     """
     observed = [
-        drift_table(reference, frame, numeric_features, categorical_features)
-        for frame in quiet_periods.values()
+        drift_table(reference, frame, numeric_features, categorical_features).assign(month=month)
+        for month, frame in quiet_periods.items()
     ]
     if not observed:
         raise ValueError("need at least one quiet-period month to calibrate against")
+
     combined = pd.concat(observed)
-    quiet_psi = float(np.nanmax(combined["psi"]))
-    quiet_ks = float(np.nanmax(combined["ks"]))
-    return {
-        "psi_alert": round(quiet_psi * safety_factor, 4),
-        "ks_alert": round(quiet_ks * safety_factor, 4),
-        "quiet_max_psi": round(quiet_psi, 4),
-        "quiet_max_ks": round(quiet_ks, 4),
-        "quiet_months": sorted(quiet_periods),
-        "safety_factor": safety_factor,
-        "basis": (
-            "maximum PSI/KS observed between the training reference and individual "
-            "training months, scaled by the safety factor — i.e. larger than anything "
-            "this dataset produced while it was stable"
-        ),
-    }
+    quiet = (
+        combined.groupby(["feature", "kind"], as_index=False)
+        .agg(quiet_max_psi=("psi", "max"), quiet_max_ks=("ks", "max"))
+    )
+    # round the observed maxima FIRST so the published table is internally
+    # consistent: alert == quiet maximum x safety factor at displayed precision
+    quiet["quiet_max_psi"] = quiet["quiet_max_psi"].round(4)
+    quiet["quiet_max_ks"] = quiet["quiet_max_ks"].round(4)
+    quiet["psi_alert"] = (quiet["quiet_max_psi"] * safety_factor).round(4)
+    quiet["ks_alert"] = (quiet["quiet_max_ks"] * safety_factor).round(4)
+    quiet.attrs["safety_factor"] = safety_factor
+    quiet.attrs["quiet_months"] = sorted(quiet_periods)
+    quiet.attrs["basis"] = (
+        "each feature's alert is the worst PSI/KS it produced between the training "
+        "reference and individual training months, scaled by the safety factor — "
+        "i.e. larger than that feature ever moved while this dataset was stable"
+    )
+    return quiet.sort_values("psi_alert", ascending=False).reset_index(drop=True)
+
+
+def evaluate_against_thresholds(
+    drift: pd.DataFrame, thresholds: pd.DataFrame
+) -> pd.DataFrame:
+    """Join measured drift to each feature's own alert level and flag breaches."""
+    merged = drift.merge(
+        thresholds[["feature", "psi_alert", "ks_alert", "quiet_max_psi"]],
+        on="feature",
+        how="left",
+    )
+    merged["psi_alarm"] = merged["psi"] > merged["psi_alert"]
+    merged["ks_alarm"] = merged["ks"] > merged["ks_alert"]
+    # how far past its own noise floor the feature has moved — comparable ACROSS
+    # features in a way that raw PSI is not
+    merged["psi_ratio"] = (merged["psi"] / merged["psi_alert"]).round(2)
+    return merged.sort_values("psi_ratio", ascending=False).reset_index(drop=True)

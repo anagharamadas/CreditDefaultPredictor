@@ -113,22 +113,67 @@ def test_drift_table_shape_and_ordering():
     assert np.isnan(table.loc[table["feature"] == "cat", "ks"]).all()
 
 
+def _quiet_setup(seed=4, noisy=False):
+    rng = np.random.default_rng(seed)
+    reference = pd.DataFrame({
+        "steady": rng.normal(size=20_000),
+        # a feature whose value is usually missing: its non-null sample is small, so
+        # it jumps around far more from month to month even when nothing is wrong
+        "jumpy": np.where(rng.uniform(size=20_000) < 0.85, np.nan, rng.normal(size=20_000)),
+        "cat": rng.choice(["x", "y"], 20_000),
+    })
+    quiet = {}
+    for i in range(4):
+        n = 3000
+        quiet[f"m{i}"] = pd.DataFrame({
+            "steady": rng.normal(size=n),
+            "jumpy": np.where(rng.uniform(size=n) < 0.85, np.nan, rng.normal(size=n)),
+            "cat": rng.choice(["x", "y"], n),
+        })
+    return reference, quiet
+
+
 def test_thresholds_are_derived_from_the_quiet_period():
     """The alert must sit above anything the stable period produced — that is the
     justification EVAL_PROTOCOL demands instead of a borrowed 0.1/0.25 convention."""
-    rng = np.random.default_rng(4)
-    reference = pd.DataFrame({"num": rng.normal(size=10_000), "cat": rng.choice(["x", "y"], 10_000)})
-    quiet = {
-        f"m{i}": pd.DataFrame(
-            {"num": rng.normal(size=3000), "cat": rng.choice(["x", "y"], 3000)}
-        )
-        for i in range(3)
-    }
-    thresholds = calibrate_thresholds(reference, quiet, ["num"], ["cat"], safety_factor=2.0)
-    assert thresholds["psi_alert"] == pytest.approx(thresholds["quiet_max_psi"] * 2, rel=1e-6)
-    assert thresholds["psi_alert"] > 0          # sampling noise alone is non-zero
-    assert thresholds["psi_alert"] < 0.1        # but far below the shift we care about
-    assert "larger than anything" in thresholds["basis"]
+    reference, quiet = _quiet_setup()
+    thresholds = calibrate_thresholds(reference, quiet, ["steady", "jumpy"], ["cat"], safety_factor=2.0)
+    assert set(thresholds["feature"]) == {"steady", "jumpy", "cat"}
+    for _, row in thresholds.iterrows():
+        assert row["psi_alert"] == pytest.approx(row["quiet_max_psi"] * 2, abs=1e-4)
+    assert (thresholds["psi_alert"] > 0).all()   # sampling noise alone is non-zero
+    assert "larger than that feature ever moved" in thresholds.attrs["basis"]
+
+
+def test_each_feature_gets_its_own_noise_floor():
+    """A single global threshold would be set by the noisiest feature and would then
+    be far too deaf to notice a real move in a quiet one."""
+    reference, quiet = _quiet_setup()
+    thresholds = calibrate_thresholds(
+        reference, quiet, ["steady", "jumpy"], ["cat"]
+    ).set_index("feature")
+    assert thresholds.loc["jumpy", "psi_alert"] > thresholds.loc["steady", "psi_alert"] * 3
+
+
+def test_alarms_compare_each_feature_to_its_own_threshold():
+    from credit_default.drift import evaluate_against_thresholds
+
+    thresholds = pd.DataFrame({
+        "feature": ["steady", "jumpy"],
+        "psi_alert": [0.02, 0.40],
+        "ks_alert": [0.05, 0.30],
+        "quiet_max_psi": [0.01, 0.20],
+    })
+    measured = pd.DataFrame({
+        "feature": ["steady", "jumpy"],
+        "kind": ["numeric", "numeric"],
+        "psi": [0.10, 0.10],      # identical raw drift...
+        "ks": [0.02, 0.02],
+    })
+    result = evaluate_against_thresholds(measured, thresholds).set_index("feature")
+    assert result.loc["steady", "psi_alarm"]        # ...alarms for the quiet feature
+    assert not result.loc["jumpy", "psi_alarm"]     # ...but is normal for the jumpy one
+    assert result.loc["steady", "psi_ratio"] > result.loc["jumpy", "psi_ratio"]
 
 
 def test_calibration_requires_a_quiet_period():
