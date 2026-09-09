@@ -21,31 +21,18 @@ from sklearn.metrics import average_precision_score
 
 from credit_default.calibration import expected_calibration_error, reliability_table
 from credit_default.decision_policy import drift_shift_row, policy_table
-from credit_default.evaluation import latest_runs, probabilities, split_features
+from credit_default.evaluation import (
+    N_BOOT,
+    latest_runs,
+    month_stratified_bootstrap,
+    probabilities,
+    split_features,
+)
 from credit_default.splits import HOLDOUT, VALIDATION
 from credit_default.tracking import setup_tracking, start_tracked_run
 from credit_default.train import evaluate
 
 DOC = Path("docs/P6_FINAL_REPORT.md")
-N_BOOT = 500
-SEED = 20260904
-
-
-def month_stratified_bootstrap_diff(x, y, p_a, p_b, n_boot=N_BOOT, seed=SEED):
-    """CI for PR-AUC(a) - PR-AUC(b): resample loans within vintage months."""
-    rng = np.random.default_rng(seed)
-    months = x["issue_d"].dt.to_period("M").astype(str).to_numpy()
-    y = np.asarray(y, dtype=float)
-    idx_by_month = [np.flatnonzero(months == m) for m in np.unique(months)]
-    diffs = np.empty(n_boot)
-    for b in range(n_boot):
-        sample = np.concatenate([rng.choice(ix, size=len(ix), replace=True) for ix in idx_by_month])
-        diffs[b] = (
-            average_precision_score(y[sample], p_a[sample])
-            - average_precision_score(y[sample], p_b[sample])
-        )
-    lo, hi = np.percentile(diffs, [2.5, 97.5])
-    return float(diffs.mean()), float(lo), float(hi)
 
 
 def main() -> None:
@@ -57,7 +44,9 @@ def main() -> None:
     x_val, y_val, _ = split_features(VALIDATION)
     p_lgbm = np.asarray(probabilities(mlflow.get_run(chosen_id), x_val))
     p_logit = np.asarray(probabilities(mlflow.get_run(ids["logistic"]), x_val))
-    mean_diff, lo, hi = month_stratified_bootstrap_diff(x_val, y_val, p_lgbm, p_logit)
+    mean_diff, lo, hi = month_stratified_bootstrap(
+        x_val, y_val, p_lgbm, p_logit, {"pr_auc": average_precision_score}
+    )["pr_auc"]
     margin_is_real = lo > 0
     print(f"selection margin (PR-AUC lgbm-logit) on validation: "
           f"{mean_diff:+.4f} [95% CI {lo:+.4f}, {hi:+.4f}] -> "

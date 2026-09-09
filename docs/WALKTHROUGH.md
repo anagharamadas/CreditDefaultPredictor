@@ -500,4 +500,77 @@ every request end to end, and fails closed when it cannot do those things.
 
 ---
 
-*Next section: P9 — CI/CD, added at P9 exit.*
+## P9 — CI/CD and the quality gate
+
+**The problem P9 solves:** up to here, every guarantee was checked *by me, on my
+machine*. That is exactly the arrangement in which an environment-dependent pass
+survives unnoticed.
+
+**Step 1 — CI that lacks a developer's advantages** (`.github/workflows/ci.yml`)
+- Runs on every push to main and every PR, in a fresh clone with **no raw data**
+  (1.6 GB, DVC-tracked, never committed), no Docker services, no conda env, and no
+  shell habits. Four tiers, ordered cheapest-first so failures are legible:
+  lockfile reproducibility → lint → the 139-test suite → the entrypoints run as a
+  *program* → generated docs still match their generating code.
+- It invokes plain `pytest` deliberately. The week before, the suite had passed for
+  me under `python -m pytest` (which silently adds the working directory to the
+  import path) and failed for anyone running the documented command.
+
+**Step 2 — CI earns its keep on the first run**
+- Tier 3 failed with "train/serve parity broken" — on GitHub, while passing on my
+  Mac *and* in a local Linux container. The container was the clue: Docker on
+  Apple Silicon runs arm64; GitHub runners are x86-64.
+- The system was fine — the real parity test passed on that same runner. **My smoke
+  script was wrong**: it compared five rows computed inside a 21-row batch against a
+  separate 5-row batch and demanded bit-equality. That is not a parity check; it
+  asserts that linear algebra accumulates identically at different matrix shapes,
+  which nothing guarantees and x86 vectorisation does not honour.
+- The distinction that matters: the *transform* is elementwise, so it is genuinely
+  bit-exact at any batch size — and that is the guarantee this project makes.
+  Predictions involve a matrix multiply, whose summation order may vary with shape.
+- *Interview line: "CI caught an over-strict assertion of mine on its first run,
+  because the runner had hardware I don't. No amount of local testing would have
+  found it — both of my Linux checks were arm64."*
+
+**Step 3 — The model quality gate** (`quality_gate.py`)
+- Three rules from the protocol frozen in P3: ranking must improve *beyond noise*
+  (bootstrap interval entirely above zero — a higher number alone is not enough);
+  calibration must not degrade beyond noise (blocking the bad trade of buying
+  ranking with worse probabilities, which would break a threshold *derived from*
+  probabilities); ties go to the incumbent.
+- **Fails closed.** Cannot evaluate → exit 2, a refusal. A gate whose job is to
+  withhold approval must treat "cannot check" as "no".
+- Proven in both directions, because a gate that only ever refuses is useless:
+  champion vs itself → blocked (a tie); LightGBM vs a temporarily-registered
+  logistic incumbent → passed at +0.0209, reproducing ADR-0004's figure exactly.
+
+**Step 4 — Honest about what CI cannot do** (`docs/TESTING.md`)
+- Nine tests are excluded by marker because the runner truly lacks what they need
+  (the un-committed raw data; the running stack). The quality gate is the bigger
+  gap: it needs models and real data, so its **rules** are unit-tested in CI while
+  its **execution** happens where the models live.
+- Stated rather than papered over: a green CI badge means *the code is sound*, not
+  *the model is approved*. Two different claims, deliberately kept apart.
+
+**Step 5 — Connect everything once and look for seams**
+(`docs/E2E_WALKTHROUGH.md`)
+- Every component had passing tests; this asked a different question — do they work
+  when *connected*? Raw file → parquet (26s) → flow training (28s) → quality gate →
+  register → promote → serve → stored prediction, walked once, deliberately.
+- Two good results: a full retrain from freshly rebuilt data produced a model
+  measurably **identical** to the incumbent (difference 0.00000, CI [0, 0]) — so the
+  gate blocked it as a tie, correctly; and the frozen holdout re-verified against the
+  rebuilt parquet, proving those 152,838 IDs are a function of raw data and rules
+  rather than of a convenient intermediate file.
+- **Two gaps found, neither reachable by a unit test.** The service caches its
+  champion at startup, so moving the registry alias does nothing until a restart —
+  which means P7's one-line rollback gesture is incomplete, and predictions can be
+  recorded under a stale `model_version` (issue #79). And at 32ms a request, replaying
+  665k loans sequentially takes ~6 hours, which would quietly kill the repeatability
+  that makes the replay worth building (issue #80).
+- *Interview line: "the integration exercise found that my rollback wouldn't have
+  worked — before the phase that depends on it, rather than during."*
+
+---
+
+*Next section: P10 — drift, replay, observability, added at P10 exit.*

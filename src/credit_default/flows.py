@@ -56,14 +56,22 @@ def train_model(model_name: str) -> str:
     return run_id
 
 
-@flow(name="baseline-training")
-def baseline_training(models: tuple[str, ...] = ("prior", "logistic", "lightgbm")) -> dict:
-    """The P5 DAG. Sequential on purpose: one laptop, memory-heavy tasks."""
+def validate_model_names(models: tuple[str, ...]) -> tuple[str, ...]:
+    """Reject unknown model names. Deliberately a plain function, not part of the
+    flow body: it is a rule about arguments, so it can be tested without starting
+    Prefect's engine (which spins up a temporary server and floods the log)."""
     from credit_default.train import RUNNERS
 
     unknown = set(models) - set(RUNNERS)
     if unknown:
         raise ValueError(f"unknown models: {sorted(unknown)}; choose from {sorted(RUNNERS)}")
+    return tuple(models)
+
+
+@flow(name="baseline-training")
+def baseline_training(models: tuple[str, ...] = ("prior", "logistic", "lightgbm")) -> dict:
+    """The P5 DAG. Sequential on purpose: one laptop, memory-heavy tasks."""
+    validate_model_names(models)
 
     path = ensure_interim()
     validate_interim(path)

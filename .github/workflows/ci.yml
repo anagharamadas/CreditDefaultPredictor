@@ -1,0 +1,71 @@
+name: CI
+
+# Runs on every push and pull request. The point is not "tests exist" — it is that
+# they run in a place with none of a developer's local advantages: a fresh clone, no
+# raw data (1.6 GB, DVC-tracked, never committed), no Docker services, no conda env,
+# and no shell habits. An environment-dependent pass cannot survive here.
+# Feature branches are covered by their pull request, so `push` is limited to main —
+# otherwise every PR branch would run twice for the same commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:   # run it by hand from the Actions tab
+
+concurrency:  # a new push supersedes an in-flight run of the same branch
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: src   # the package lives in src/; pytest reads this from pyproject,
+                        # plain scripts need it in the environment
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.11"          # same uv the Dockerfile pins
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      # Tier 0 — the environment itself. `--frozen` proves uv.lock alone can build
+      # the environment; `lock --check` proves nobody edited pyproject.toml without
+      # relocking, which would silently drift the pinned versions.
+      - name: Tier 0 — environment is reproducible from the lockfile
+        run: |
+          uv lock --check
+          uv sync --frozen
+
+      # Tier 1 — lint. Cheapest and most often broken, so it fails first.
+      - name: Tier 1 — lint
+        run: uv run ruff check src tests scripts
+
+      # Tier 2 — the suite. Deliberately invoked as plain `pytest`, exactly as a
+      # developer runs it: `python -m pytest` silently adds the CWD to sys.path and
+      # would hide import bugs that break for everyone else.
+      # Excluded: `realdata` (needs the un-committed raw file) and `services`
+      # (needs the Docker stack). Everything else runs against committed fixtures.
+      - name: Tier 2 — unit, contract, pipeline and API tests
+        run: uv run pytest -m "not realdata and not services" -q --tb=short
+
+      # Tier 3 — smoke. Imports and runs the real module entrypoints OUTSIDE pytest,
+      # on the committed 64-row fixture. Catches breakage that only shows up when
+      # the code is used as a program rather than as a test subject.
+      - name: Tier 3 — pipeline smoke on the committed fixture
+        run: uv run python scripts/ci_smoke.py
+
+      # Tier 4 — the generated documents still match the code that generates them.
+      # (Also asserted by tests; kept as its own step so a stale doc reads as a
+      # documentation failure rather than a mysterious test failure.)
+      - name: Tier 4 — generated docs are in sync
+        run: |
+          uv run python scripts/render_ledger.py
+          uv run python scripts/render_feature_catalogue.py
+          git diff --exit-code docs/LEAKAGE_LEDGER.md docs/FEATURE_CATALOGUE.md
