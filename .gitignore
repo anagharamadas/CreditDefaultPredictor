@@ -26,3 +26,8 @@ mlruns/
 mlflow.db
 mlartifacts/
 .dvc/cache
+
+# Notebooks: keep the code, drop the outputs
+notebooks/**/*.ipynb
+!notebooks/README.md
+.ipynb_checkpoints/
