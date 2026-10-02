@@ -573,4 +573,108 @@ survives unnoticed.
 
 ---
 
-*Next section: P10 — drift, replay, observability, added at P10 exit.*
+## P10 — Drift, replay, and monitoring under label lag
+
+**The problem P10 solves:** the model was judged once, on a holdout frozen in 2015.
+Everything after that is a claim about a world that has moved on. P10 asks the two
+questions a deployed model actually faces — *has the incoming data changed?* and *is
+the model still any good?* — and finds that the second one is much harder to answer
+honestly than it looks.
+
+**Step 0 — Decide not to install a monitoring library** (ADR-0005)
+- The obvious move was NannyML, whose CBPE estimates performance without labels. I
+  read what it needs: **calibrated probabilities**. P6 measured ours and they are
+  not (ECE 0.0287, and ADR-0004 rejected the calibrator for a structural reason).
+- So the library would have produced confident numbers built on an assumption this
+  project had already measured as false. Rejected — PSI, KS and a horizon-aware
+  performance view are ~200 lines, and I can state their failure modes.
+- *Interview line: "I rejected the standard tool because I'd already measured that
+  its central assumption doesn't hold for my model. Knowing what a library assumes
+  is the job; installing it isn't."*
+
+**Step 1 — Replay 2017–2018 through the live service** (`replay.py`)
+- Nothing is injected and nothing is simulated offline. 665,090 real loans, in
+  **issue order**, over real HTTP, through the real contract, the real pipeline and
+  the real champion — so every prediction analysed later had to survive the whole
+  production path. Computing drift in pandas would have been faster and would have
+  proved nothing about the system.
+- Time is handled honestly: wall-clock pacing is compressed, but each loan's own
+  `issue_d` is preserved and is the axis every measurement uses. That's why the
+  store keeps `issue_d` separate from `scored_at`. Oldest-first ordering means an
+  interrupted run is a *prefix* of a full one, not a biased random subset.
+- Unlabelled loans are included. At scoring time nobody knows the outcome; replaying
+  only resolved loans would rebuild the survivorship bias this project exists to
+  avoid.
+- **Throughput (#80) had a counter-intuitive answer.** Client concurrency did
+  nothing — 33 loans/s at 1, 4, 8, 16 and 24 threads alike. Scoring is CPU-bound and
+  holds the GIL (pydantic, pandera, pandas, predict), so one server process
+  serialises everything no matter how concurrent the caller is. The fix was server
+  *processes*: 35/s → 118/s (4) → 203/s (8). Six hours became 55 minutes.
+- *Interview line: "I measured before optimising, and the measurement said my first
+  instinct was pointed at the wrong side of the connection."*
+
+**Step 2 — Derive the alert thresholds instead of adopting them** (`drift.py`)
+- PSI's famous 0.1/0.25 bands are conventions, not properties of this data. The
+  evaluation protocol frozen in P3 forbids thresholds copied from a default, so each
+  feature's alarm is set above the worst it moved during four **quiet** training
+  months (2015-01/04/07/10) — a period where the data is known to be stable — scaled
+  by 2×.
+- The first version used one global threshold and it came out at 0.35, set entirely
+  by `mths_since_last_record` (84% null, so a small non-null sample jumps around).
+  A single number high enough to ignore that feature is deaf to a real move in a
+  well-populated one. **Per-feature thresholds**, and a `psi_ratio` that makes
+  "how far past its own floor" comparable across features.
+- Two edge cases the real data found: PSI on a constant reference returned 0.0 —
+  silently "no drift" for a feature that had in fact changed completely (fixed with
+  a low-cardinality fallback); and a feature with *zero* quiet-period variation gave
+  a threshold of 0, so any movement was ∞ (fixed with a minimum alert floor plus a
+  `never_varied_in_training` flag, which is information, not noise).
+
+**Step 3 — The drift is real, and it is large** (`docs/MONITORING_REPORT.md`)
+- Worst-feature PSI climbs steadily from **0.15 (2017-01) to 2.19 (2018-12)**;
+  features past their own noise floor go **27 → 51**. This is not a synthetic
+  perturbation — it is what LendingClub's book actually did.
+- The clearest single story: `disbursement_method` was **100% "Cash" throughout
+  training** and is ~19% "DirectPay" by late 2018. A product that did not exist when
+  the model was fitted. One-hot encoding with `handle_unknown="ignore"` means the
+  model doesn't crash — it just silently sees nothing there.
+- **Prediction PSI stays flat at ~0.01.** The inputs moved enormously and the output
+  distribution barely noticed. That is the most important line in the report: if I
+  had monitored only the score distribution — which is the cheap, popular thing to
+  do — I would have seen nothing at all.
+
+**Step 4 — Performance monitoring where the labels aren't there yet**
+(`label_lag.py`)
+- A 36-month loan issued in 2018-11 cannot have defaulted by the data snapshot. Any
+  "performance" computed on it is measuring **who defaulted fastest**, not who the
+  model ranked well — the fast-resolver bias from P2, returning in a new costume.
+- Two views, side by side. *As-observed* evaluates everything resolved by the
+  snapshot; PR-AUC appears to collapse **0.359 → 0.018** across the window. *Fixed
+  12-month horizon* judges every vintage on an equal window: **0.399 → 0.293**, a
+  real but ordinary decline. The first chart is almost entirely an artefact of time
+  passing; the second is the honest answer.
+- Where a 12-month view is structurally impossible (2018-04 onward), the metric is
+  **blanked rather than estimated**, coverage is still reported, and the chart draws
+  a line saying why. A monitoring dashboard that cannot say "I don't know yet" will
+  eventually say something false instead.
+- A subtlety worth the separate guard: `window_complete` and `both_classes` are
+  different failures. A month with a 100% default rate isn't un-evaluable — it's the
+  illusion itself, and it should be visible.
+
+**Step 5 — Two bugs the real run exposed**
+- Expected cost came back as **0.000** — two pandas Series with mismatched indexes
+  aligned to nothing, and the arithmetic quietly produced an empty result rather
+  than an error. Fixed by converting to arrays; regression test uses deliberately
+  mismatched indexes.
+- A test deleted the finished 665,090-row replay. `test_replay.py` wrote under the
+  same `replay` tag and cleaned up by deleting everything with that tag — it passed
+  in isolation and destroyed real data in a full-suite run. The traffic tag is now a
+  parameter, the test uses its own, and `clear_replay_rows` still defaults to the
+  real tag so the destructive option has to be named out loud.
+- *Interview line: "my cleanup was correct for the row it wrote and catastrophic for
+  the rows it didn't. The fix wasn't a better delete — it was giving test traffic its
+  own identity."*
+
+---
+
+*Next section: P11 — observability and operations, added at P11 exit.*

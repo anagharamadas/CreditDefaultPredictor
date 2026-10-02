@@ -9,6 +9,43 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P10 — via feature/p10-drift)
+- ADR-0005: drift monitoring implemented in-project, **no monitoring library**.
+  NannyML rejected on a measured ground — CBPE requires calibrated probabilities and
+  P6 (#39) established that ours are not.
+- `src/credit_default/replay.py`: 665,090 loans from 2017–2018 replayed in issue
+  order through the **live** API, so every analysed prediction passed the real
+  contract, pipeline and champion. `issue_d` preserved as the measurement axis;
+  resumable; unlabelled loans included by design.
+- `src/credit_default/drift.py`: PSI (numeric and categorical), KS, and alert
+  thresholds **derived per feature** from four quiet training months rather than
+  adopted from the 0.1/0.25 convention, per EVAL_PROTOCOL.
+- `src/credit_default/label_lag.py`: as-observed vs fixed-horizon performance views,
+  with a structural `is_evaluable` check that blanks months where the horizon cannot
+  have elapsed instead of reporting a number for them.
+- `scripts/monitoring_report.py` → `docs/MONITORING_REPORT.md` and
+  `docs/figures/monitoring.png`, generated entirely from stored live predictions.
+- Measured results: worst-feature PSI 0.15 → 2.19 over 24 months, features past
+  their own noise floor 27 → 51, while **prediction PSI stayed flat at ~0.01**.
+  `disbursement_method` went from 100% Cash in training to ~19% DirectPay — a
+  category absent at fit time. Fixed-horizon PR-AUC declined 0.399 → 0.293; the
+  as-observed view appeared to collapse to 0.018, almost entirely an artefact of
+  label lag.
+- Issue #80 resolved in practice: replay throughput is GIL-bound, so client
+  concurrency changed nothing (33/s at 1–24 threads); server processes took it to
+  203/s, 6 hours → 55 minutes.
+
+### Fixed
+- Expected cost returned 0.000 — two pandas Series with mismatched indexes aligned
+  to nothing. Converted to arrays; regression test uses mismatched indexes.
+- PSI returned 0.0 ("no drift") against a constant reference, and ∞ for a feature
+  with zero quiet-period variation. Low-cardinality bin fallback, a minimum alert
+  floor, and a `never_varied_in_training` flag.
+- `test_replay.py` wrote under the real `replay` traffic tag and cleaned up by tag,
+  deleting a completed 665,090-row replay during a full-suite run. The tag is now a
+  parameter; `clear_replay_rows` still defaults to the real tag so the destructive
+  option must be named. Replay re-run and verified.
+
 ### Added (P9 — via feature/p9-cicd)
 - GitHub Actions CI: four tiers (lockfile reproducibility, lint, 139-test suite,
   entrypoint smoke, generated-doc sync) on every push to main and every PR, in a
