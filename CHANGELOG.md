@@ -9,6 +9,30 @@ This file records *what* changed; *why* lives in the charter revision notes and
 
 ## [Unreleased]
 
+### Added (P11 — via feature/p11-rollback)
+- ADR-0006: a running service re-checks the `@champion` alias on a timer (default 30s)
+  and hot-swaps. Rejected: per-request alias resolution (puts a registry round trip in
+  the scoring path), an explicit `/reload` (makes promotion responsible for finding
+  every replica — the coupling the alias indirection exists to remove), and restart as
+  the documented mechanism.
+- `src/credit_default/api/champion.py`: `ChampionWatcher` — a cheap version probe on a
+  timer, a full load only when the answer changes, and the swap as a single assignment
+  of a frozen `ServingModel(model, name, version, loaded_at)`.
+- `/ready` now publishes `model_alias`, `model_loaded_at`, `alias_checked_at`,
+  `staleness_budget_seconds` and `alias_check_error`, so the staleness window is
+  observable rather than inferred. `MODEL_REFRESH_SECONDS=0` pins a replica and says so.
+- `scripts/verify_champion_refresh.py`: rehearses a rollback against a live registry
+  under its own model name, then deletes it. Measured **2.0s against a 2s budget**, and
+  the returned score moved with the version.
+
+### Fixed
+- **#79** — the service resolved `@champion` once at startup and never again, so an
+  alias move did nothing until a restart and decisions were recorded under a retired
+  `model_version`. Found by the P9 end-to-end walkthrough.
+- A latent version/model split: model, name and version were three separate attributes
+  on application state, so any swap could score with one and record another. They are
+  now one frozen record, read once per request.
+
 ### Added (P10 — via feature/p10-drift)
 - ADR-0005: drift monitoring implemented in-project, **no monitoring library**.
   NannyML rejected on a measured ground — CBPE requires calibrated probabilities and

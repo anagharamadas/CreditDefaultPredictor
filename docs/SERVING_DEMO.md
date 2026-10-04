@@ -86,9 +86,49 @@ so the two layers cannot drift apart.
 | Situation | Behaviour | Why |
 |---|---|---|
 | Registry unreachable / no champion | `/ready` 503 with the error; `/score` 503 | Never score with an unknown model |
+| Registry goes away *after* a successful load | Keeps serving; `/ready` shows `alias_check_error` | A service holding a good model should not fall over because a dependency it no longer needs did |
 | Prediction store down | `/score` 503, decision withheld | A credit decision that cannot be recorded is not made |
 | Payload violates the contract | 422 listing violated columns | The API enforces the *training* contract, not a copy |
 | Unknown category or extra field | 422 at the pydantic layer | Closed vocabularies; `extra="forbid"` |
+
+## Changing the model without a restart (#79, ADR-0006)
+
+The service re-checks which version `@champion` points at every
+`MODEL_REFRESH_SECONDS` (default 30) and hot-swaps when it changes. Moving the alias
+*is* the deployment, and moving it back *is* the rollback — no restart, no
+coordination with individual replicas.
+
+`/ready` publishes the staleness facts, so an operator mid-rollback reads the answer
+rather than inferring it:
+
+```json
+{
+  "ready": true,
+  "model_name": "credit-default-granting",
+  "model_version": 1,
+  "model_alias": "champion",
+  "model_loaded_at": "2026-10-04T08:25:41Z",
+  "alias_checked_at": "2026-10-04T08:26:09Z",
+  "staleness_budget_seconds": 30,
+  "alias_check_error": null
+}
+```
+
+**Stated plainly: a rollback is not instantaneous.** It is late by at most the
+budget, per replica. That is the trade ADR-0006 chose over putting a registry call
+in the scoring path or making promotion responsible for finding every replica.
+
+Rehearse it against a live registry — safely, under its own model name, cleaned up
+afterwards:
+
+```bash
+PYTHONPATH=src python scripts/verify_champion_refresh.py
+```
+
+It registers two models that score differently, serves one, moves the alias, and
+measures how long the running service takes to notice. Checking the *score* and not
+just the reported version is the point: the failure worth catching is metadata that
+updates while the old model keeps answering.
 
 ## Teardown
 

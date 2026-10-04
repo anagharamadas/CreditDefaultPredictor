@@ -16,6 +16,7 @@ The charter states each decision as a fact; the ADR holds the reasoning.
 | [0003](0003-cost-matrix.md) | Cost matrix: FN:FP = 5:1 [ASSUMED], 3:1–8:1 sensitivity | ACCEPTED | 2026-09-04 |
 | [0004](0004-model-selection.md) | v1 model: LightGBM uncalibrated (bootstrap-real margin) | ACCEPTED | 2026-09-04 |
 | [0005](0005-drift-monitoring.md) | Drift monitoring: implement a narrow metric set, no library | ACCEPTED | 2026-09-09 |
+| [0006](0006-champion-refresh.md) | Champion refresh: poll the alias, bounded staleness on /ready | ACCEPTED | 2026-10-04 |
 
 ## Expected future ADRs
 

@@ -8,6 +8,11 @@ pipeline inside the registered artifact -> decision at the derived threshold.
 The model arrives ONLY via `models:/credit-default-granting@champion`; /ready is
 false until that load succeeds. create_app(model_loader=...) exists so tests can
 inject a stub without a registry.
+
+The alias is re-checked in the background (ADR-0006, ticket #79) so that moving it
+— promotion, and more importantly rollback — takes effect without a restart. The
+served model, its name and its version are swapped together as one frozen record;
+see `champion.py` for why that is not a detail.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from datetime import UTC, datetime
 import pandera.errors
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 
+from credit_default.api.champion import ChampionWatcher, refresh_seconds_from_env
 from credit_default.api.logging_config import (
     REQUEST_ID_HEADER,
     configure_logging,
@@ -41,35 +47,58 @@ THRESHOLD = derive_threshold()
 log = logging.getLogger("credit_default.api")
 
 
+def served_alias() -> str:
+    """MODEL_ALIAS selects which alias to serve (default `champion`)."""
+    import os
+
+    from credit_default.registry import CHAMPION
+
+    return os.environ.get("MODEL_ALIAS", CHAMPION)
+
+
 def registry_model_loader():
     """Production loader: the registry address, nothing else.
 
-    MODEL_ALIAS selects which alias to serve (default `champion`). Promotion and
-    rollback move that alias in the registry — this service is not redeployed.
+    Promotion and rollback move that alias in the registry — this service is not
+    redeployed, and since #79 it is not restarted either.
     """
-    import os
-
-    from credit_default.registry import CHAMPION, MODEL_NAME, load, resolve
+    from credit_default.registry import MODEL_NAME, load, resolve
     from credit_default.tracking import setup_tracking
 
-    alias = os.environ.get("MODEL_ALIAS", CHAMPION)
+    alias = served_alias()
     setup_tracking()
     return load(alias), MODEL_NAME, resolve(alias)
+
+
+def registry_alias_probe() -> int:
+    """The cheap half: which version the alias points at, without loading it."""
+    from credit_default.registry import resolve
+    from credit_default.tracking import setup_tracking
+
+    setup_tracking()
+    return resolve(served_alias())
 
 
 def create_app(
     model_loader: Callable = registry_model_loader,
     store_opener: Callable | None = open_pool,
+    alias_probe: Callable[[], int] | None = registry_alias_probe,
+    refresh_seconds: float | None = None,
 ) -> FastAPI:
+    watcher = ChampionWatcher(
+        loader=model_loader,
+        probe=alias_probe,
+        alias=served_alias(),
+        refresh_seconds=(
+            refresh_seconds_from_env() if refresh_seconds is None else refresh_seconds
+        ),
+    )
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        try:
-            model, name, version = model_loader()
-            app.state.model, app.state.model_name, app.state.model_version = model, name, version
-            app.state.load_error = None
-        except Exception as exc:  # noqa: BLE001 — readiness reports any load failure
-            app.state.model = None
-            app.state.load_error = f"{type(exc).__name__}: {exc}"
+        app.state.champion = watcher
+        watcher.load_now()
+        watcher.start()
 
         # The store is a readiness dependency, not a nice-to-have: the write policy
         # says an unrecordable decision is not made, so a service that cannot write
@@ -83,6 +112,7 @@ def create_app(
             except Exception as exc:  # noqa: BLE001 — readiness reports any store failure
                 app.state.store_error = f"{type(exc).__name__}: {exc}"
         yield
+        await watcher.stop()
         if app.state.pool is not None:
             app.state.pool.close()
 
@@ -133,15 +163,24 @@ def create_app(
 
     @app.get("/ready", response_model=ReadyResponse)
     def ready(response: Response) -> ReadyResponse:
-        problems = [p for p in (app.state.load_error, app.state.store_error) if p]
-        if app.state.model is None or problems:
+        serving = watcher.current
+        problems = [p for p in (watcher.load_error, app.state.store_error) if p]
+        if serving is None or problems:
             response.status_code = 503
-            return ReadyResponse(ready=False, detail="; ".join(problems) or "model not loaded")
+            return ReadyResponse(
+                ready=False,
+                detail="; ".join(problems) or "model not loaded",
+                **watcher.status(),
+            )
+        # The staleness facts travel with readiness deliberately: "which alias, which
+        # version, how recently confirmed" is what an operator needs mid-rollback.
         return ReadyResponse(
             ready=True,
-            model_name=app.state.model_name,
-            model_version=app.state.model_version,
+            model_name=serving.name,
+            model_version=serving.version,
+            model_loaded_at=serving.loaded_at,
             store_ready=app.state.pool is not None,
+            **watcher.status(),
         )
 
     @app.post("/score", response_model=ScoreResponse)
@@ -152,7 +191,12 @@ def create_app(
         # the middleware's ContextVar, not a parameter.
         request_source: str = Header(default="live", alias="X-Source"),
     ) -> ScoreResponse:
-        if app.state.model is None:
+        # Read the served model ONCE into a local. A background swap replaces the
+        # whole record, so this request finishes against a consistent
+        # (model, name, version) triple — it cannot score with one and record the
+        # other, which is the audit-trail failure #79 describes.
+        serving = watcher.current
+        if serving is None:
             log.warning("scoring refused: model not loaded")
             raise HTTPException(status_code=503, detail="model not loaded")
 
@@ -180,7 +224,7 @@ def create_app(
                 },
             ) from exc
 
-        p_default = float(app.state.model.predict_proba(frame)[:, 1][0])
+        p_default = float(serving.model.predict_proba(frame)[:, 1][0])
         cost_ratio = f"{COST_FN:g}:{COST_FP:g} (ADR-0003 [ASSUMED])"
         response = ScoreResponse(
             id=payload["id"],
@@ -188,8 +232,8 @@ def create_app(
             decision="decline" if p_default >= THRESHOLD else "fund",
             threshold=THRESHOLD,
             cost_ratio_assumed=cost_ratio,
-            model_name=getattr(app.state, "model_name", "unknown"),
-            model_version=getattr(app.state, "model_version", 0),
+            model_name=serving.name,
+            model_version=serving.version,
             scored_at=datetime.now(tz=UTC),
         )
 

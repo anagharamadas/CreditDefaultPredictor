@@ -20,7 +20,8 @@ def test_ready_reports_the_loaded_model(client):
 
 
 def test_ready_is_503_when_the_model_cannot_load(payload, failing_loader):
-    with TestClient(create_app(model_loader=failing_loader, store_opener=None)) as c:
+    app = create_app(model_loader=failing_loader, store_opener=None, alias_probe=None)
+    with TestClient(app) as c:
         r = c.get("/ready")
         assert r.status_code == 503
         assert "registry unreachable" in r.json()["detail"]
