@@ -51,6 +51,13 @@ def payload():
 
 @pytest.fixture()
 def client(stub_loader):
-    """App with a stub model and no prediction store — pure API behaviour."""
-    with TestClient(create_app(model_loader=stub_loader, store_opener=None)) as c:
+    """App with a stub model and no prediction store — pure API behaviour.
+
+    `alias_probe=None` disables the background champion poll (#79): these tests are
+    about request handling, and a poller would reach for a registry that isn't there.
+    Tests that exercise the poll inject their own probe.
+    """
+    with TestClient(
+        create_app(model_loader=stub_loader, store_opener=None, alias_probe=None)
+    ) as c:
         yield c

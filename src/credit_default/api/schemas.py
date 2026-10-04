@@ -90,3 +90,16 @@ class ReadyResponse(BaseModel):
     model_version: int | None = None
     store_ready: bool = False
     detail: str | None = None
+
+    # Staleness, made observable (#79, ADR-0006). The alias is re-checked in the
+    # background, so a rollback is late by at most `staleness_budget_seconds` —
+    # and `alias_checked_at` says when that budget last restarted. An operator
+    # mid-rollback can read the answer instead of inferring it from behaviour.
+    model_alias: str | None = None
+    model_loaded_at: datetime | None = None
+    alias_checked_at: datetime | None = None
+    #: None when polling is disabled (MODEL_REFRESH_SECONDS=0) — the version served
+    #: is then pinned for the life of the process, which is a choice, not a default.
+    staleness_budget_seconds: float | None = None
+    #: set when the registry could not be reached; the loaded model keeps serving
+    alias_check_error: str | None = None

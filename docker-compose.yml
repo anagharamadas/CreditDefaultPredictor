@@ -62,6 +62,9 @@ services:
       # (--serve-artifacts proxies them, so no shared volume is needed).
       MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
       MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+      # Rollback latency budget (ADR-0006): each worker re-checks the alias this
+      # often and hot-swaps, so moving @champion takes effect without a restart.
+      MODEL_REFRESH_SECONDS: ${MODEL_REFRESH_SECONDS:-30}
       # Scoring is CPU-bound and GIL-held, so throughput scales with PROCESSES, not
       # with client concurrency: measured 33/s at ANY number of client threads
       # against one worker, vs 118/s at 4 workers and 203/s at 8. Each worker holds
