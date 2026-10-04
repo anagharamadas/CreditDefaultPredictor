@@ -183,7 +183,7 @@ verified against that version's own docs before use.
 | Orchestration | Prefect | LOCKED |
 | Prediction store | Postgres | LOCKED |
 | Serving | FastAPI | LOCKED |
-| Drift monitoring | undecided (Evidently / NannyML / custom) | OPEN — decide by P10 |
+| Drift monitoring | own implementation, narrow metric set (no library) | LOCKED — ADR-0005 |
 | Containerisation | Docker Compose (implied by local-first) | LOCKED |
 | Deploy target | undecided | OPEN — decide by P8 |
 

@@ -37,4 +37,8 @@ LABEL org.opencontainers.image.title="credit-default-granting API" \
       org.opencontainers.image.description="Serves the registry champion model behind the training data contract."
 
 EXPOSE 8000
-CMD ["uvicorn", "credit_default.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form so UVICORN_WORKERS can be set per deployment. Scoring is CPU-bound and
+# holds the GIL (pydantic, pandera, pandas, predict), so a single process serialises
+# requests no matter how concurrent the caller is — measured while building the P10
+# replay. Worker PROCESSES are the fix; each loads its own copy of the model.
+CMD ["sh", "-c", "uvicorn credit_default.api.app:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1}"]
